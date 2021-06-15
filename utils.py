@@ -5,15 +5,9 @@ import torch
 
 from pathlib import Path
 from torch.utils.data import Dataset
-from torch.nn import Module, Sequential
 
 __author__ = "Mario Morvan"
 __email__ = "mario.morvan.18@ucl.ac.uk"
-
-
-n_wavelengths = 55
-n_timesteps = 300
-
 
 class ArielMLDataset(Dataset):
     """Class for reading files for the Ariel ML data challenge 2021"""
@@ -143,35 +137,3 @@ class ChallengeMetric:
             weights = self.weights
 
         return (1e4 - 2 * (weights * y * torch.abs(pred - y)).sum() / weights.sum() * 1e6)
-
-
-class Baseline(Module):
-    """Baseline model for Ariel ML data challenge 2021"""
-
-    def __init__(self, H1=1024, H2=256, input_dim=n_wavelengths*n_timesteps, output_dim=n_wavelengths):
-        """Define the baseline model for the Ariel data challenge 2021
-
-        Args:
-            H1: int
-                first hidden dimension (default=1024)
-            H2: int
-                second hidden dimension (default=256)
-            input_dim: int
-                input dimension (default = 55*300)
-            ourput_dim: int
-                output dimension (default = 55)
-        """
-        super().__init__()
-        self.network = Sequential(torch.nn.Linear(input_dim, H1),
-                                  torch.nn.ReLU(),
-                                  torch.nn.Linear(H1, H2),
-                                  torch.nn.ReLU(),
-                                  torch.nn.Linear(H2, output_dim),
-                                  )
-
-    def __call__(self, x):
-        """Predict rp/rs from input tensor light curve x"""
-        out = torch.flatten(
-            x, start_dim=1)  # Need to flatten out the input light curves for this type network
-        out = self.network(out)
-        return out
