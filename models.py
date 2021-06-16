@@ -184,27 +184,29 @@ class UConv1d(nn.Module):
         return self.layers(x)
 
 class DilatedNet(nn.Module):
-    def __init__(self, in_channel=55, hidden_size=200, dilation=2, num_mlp_layers=2):
+    def __init__(self, in_channel=55, hidden_size=2000, dilation=2):
         """
         """
         super(DilatedNet, self).__init__()
         self.dilation = dilation
         self.hidden_size = hidden_size
-        # First Layer
         # Input
-        self.dilated_conv1 = UConv1d(in_channel, 64, kernel=4, pad=3, dilation=dilation)
-        self.dilated_conv2 = UConv1d(64, 128, kernel=4, pad=3, dilation=dilation)
-        self.dilated_conv3 = UConv1d(128, 256, kernel=4, pad=3, dilation=dilation)
+        self.cnn = nn.Sequential(
+            UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
+            UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
+            UConv1d(128, 256, kernel=3, pad=2, dilation=dilation)
+        )
 
         self.flatten = Flatten()
-        module_list = []
-        for _ in range(num_mlp_layers-1):
-            module_list += [nn.Linear(256*n_timesteps, hidden_size),
+        self.mlp = nn.Sequential(
+            nn.Linear(256*n_timesteps, hidden_size),
             nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
-            nn.Dropout(p = 0.2)]
-        module_list += [nn.Linear(hidden_size, in_channel)]
-        self.mlp = torch.nn.Sequential(*module_list)
+            nn.Linear(hidden_size, hidden_size//4),
+            nn.BatchNorm1d(hidden_size//4),
+            nn.ReLU(),
+            nn.Linear(hidden_size//4, in_channel),
+        )
 
     def forward(self, x):
         """
@@ -212,11 +214,7 @@ class DilatedNet(nn.Module):
         :param x: Pytorch Variable
         :return:
         """
-        out = self.dilated_conv1(x)
-        out = self.dilated_conv2(out)
-        out = self.dilated_conv3(out)
-
+        out = self.cnn(x)
         out = self.flatten(out)
         out = self.mlp(out)
-
         return out

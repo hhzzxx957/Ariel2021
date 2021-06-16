@@ -7,9 +7,11 @@ import datetime
 from tqdm import tqdm
 import time
 import argparse
+import gc
 
 
-def prediction(model_dir='outputs/model_state.pt', save_name='MLP'):
+def prediction(model_dir=None, save_name='MLP'):
+    torch.cuda.set_device(device_id)
     if torch.cuda.is_available():
         device = 'cuda'
     else:
@@ -25,10 +27,11 @@ def prediction(model_dir='outputs/model_state.pt', save_name='MLP'):
                                   transform=simple_transform)
     loader_test = DataLoader(dataset_test, batch_size=batch_size)
     loader_eval = DataLoader(dataset_eval, batch_size=1000, shuffle=False)
-
-    model = torch.load(model_dir)
+    
+    if model_dir is None:
+        model_dir = f'outputs/{save_name}/model_state.pt'
+    model = torch.load(model_dir, map_location=device)
     challenge_metric = ChallengeMetric()
-    print(model.eval())
 
     # Test
     naive_1 = lambda x: torch.ones(x.shape[:-1]) * 0.06
@@ -51,10 +54,11 @@ def prediction(model_dir='outputs/model_state.pt', save_name='MLP'):
     preds = []
     print('Evaluate length', len(loader_eval))
     for k, item in tqdm(enumerate(loader_eval)):
+        gc.collect()
         item['lc'] = item['lc'].to(device)
-        preds += [model(item['lc'])]
+        preds += [model(item['lc']).detach().cpu().numpy()]
 
-    eval_pred = torch.cat(preds).detach().cpu().numpy()
+    eval_pred = torch.cat(preds)
     print(eval_pred.shape)
 
     save_path = f'outputs/{save_name}/evaluation_{datetime.datetime.today().date()}.txt'

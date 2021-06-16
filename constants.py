@@ -26,4 +26,4 @@ save_from = 20
 H1 = 1024
 H2 = 256
 
-device_id = 2
+device_id = 0

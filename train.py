@@ -4,24 +4,26 @@ from functools import partial
 import argparse
 import numpy as np
 import torch
-from torch.nn import MSELoss
+from torch.nn import MSELoss, L1Loss
 from torch.optim import Adam
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data.dataloader import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from constants import *
 from models import MLP, Baseline, DilatedNet
-from utils import (ArielMLDataset, ChallengeMetric, EarlyStopping, Scheduler,
+from utils import (ArielMLDataset, ChallengeMetric, Scheduler,
                    one_cycle, simple_transform)
 
-def train(save_name):
+
+def train(save_name, log_dir):
     torch.cuda.set_device(device_id)
+    writer = SummaryWriter(log_dir=project_dir / f'outputs/{log_dir}')
 
     if torch.cuda.is_available():
         device = 'cuda'
     else:
         device = 'cpu'
-    
 
     # Training
     dataset_train = ArielMLDataset(lc_train_path,
@@ -50,20 +52,22 @@ def train(save_name):
 
     # Define baseline model
     # model = Baseline(H1=H1, H2=H2).double().to(device)
-    model = MLP().double().to(device)
-    # model = DilatedNet().double().to(device)
+    # model = MLP().double().to(device)
+    model = DilatedNet().double().to(device)
+    print(model)
+    writer.add_graph(model)
 
     # Define Loss, metric and optimizer
-    loss_function = MSELoss()
+    loss_function = MSELoss() #L1loss, ChallengeMetric()
     challenge_metric = ChallengeMetric()
     opt = Adam(model.parameters(), lr=0.0005)
     scheduler = StepLR(opt, step_size=60, gamma=0.25)
     # scheduler = Scheduler(opt, partial(one_cycle, t_max=epochs, pivot=0.3))
 
     # Lists to record train and val scores
-    train_losses = []
-    val_losses = []
-    val_scores = []
+    # train_losses = []
+    # val_losses = []
+    # val_scores = []
     best_val_score = 0.
     count = 0
 
@@ -90,37 +94,51 @@ def train(save_name):
             val_score += score.detach().item()
         val_loss /= len(loader_val)
         val_score /= len(loader_val)
+        writer.add_scalar('valid loss', val_loss, epoch)
+        writer.add_scalar('valid score', val_score, epoch)
+        writer.add_scalar('train loss', train_loss, epoch)
+
         print('Training loss', round(train_loss, 6))
         print('Val loss', round(val_loss, 6))
         print('Val score', round(val_score, 2))
-        train_losses += [train_loss]
-        val_losses += [val_loss]
-        val_scores += [val_score]
+        print('learning rate', scheduler.get_last_lr())
+        # train_losses += [train_loss]
+        # val_losses += [val_loss]
+        # val_scores += [val_score]
 
-        if epoch >= save_from and val_score > best_val_score:
+        # early stop
+        if val_score > best_val_score:
             best_val_score = val_score
-            torch.save(model, project_dir / f'outputs/{save_name}/model_state.pt')
+            if epoch >= save_from:
+                torch.save(model,
+                        project_dir / f'outputs/{save_name}/model_state.pt')
+            count = 0
+        else:
             count += 1
             if count >= 20:
+                print('early stop, best epoch: ', epoch-count)
                 break
-        else:
-            count = 0
+
 
         scheduler.step()
         # scheduler.step(epoch)
-
-    np.savetxt(project_dir / f'outputs/{save_name}/train_losses.txt',
-               np.array(train_losses))
-    np.savetxt(project_dir / f'outputs/{save_name}/val_losses.txt',
-               np.array(val_losses))
-    np.savetxt(project_dir / f'outputs/{save_name}/val_scores.txt',
-               np.array(val_scores))
+    writer.close()
+    # np.savetxt(project_dir / f'outputs/{save_name}/train_losses.txt',
+    #            np.array(train_losses))
+    # np.savetxt(project_dir / f'outputs/{save_name}/val_losses.txt',
+    #            np.array(val_losses))
+    # np.savetxt(project_dir / f'outputs/{save_name}/val_scores.txt',
+    #            np.array(val_scores))
 
 
 if __name__ == '__main__':
     start_time = time.time()
     parser = argparse.ArgumentParser()
     parser.add_argument('--save_name', type=str, default='MLP')
+    parser.add_argument('--log_dir', type=str, default='test')
     args = parser.parse_args()
-    train(args.save_name)
+    train(args.save_name, args.log_dir)
+    print(
+        f'Parameters: {args.save_name}, train_size: {train_size}, batch_size: {batch_size}'
+    )
     print(f'Training time: {(time.time()-start_time)/60:.3f} mins')
