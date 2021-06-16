@@ -1,64 +1,89 @@
 """Define and train the baseline model"""
+import time
+from functools import partial
+import argparse
 import numpy as np
 import torch
-from utils import ArielMLDataset, ChallengeMetric, simple_transform
-from torch.utils.data.dataloader import DataLoader
 from torch.nn import MSELoss
 from torch.optim import Adam
+from torch.optim.lr_scheduler import StepLR
+from torch.utils.data.dataloader import DataLoader
 
-from models import Baseline, MLP
-from constants import project_dir, lc_train_path, params_train_path, train_size, val_size, epochs, save_from, H1, H2
+from constants import *
+from models import MLP, Baseline, DilatedNet
+from utils import (ArielMLDataset, ChallengeMetric, EarlyStopping, Scheduler,
+                   one_cycle, simple_transform)
 
-def train():
+def train(save_name):
+    torch.cuda.set_device(device_id)
+
     if torch.cuda.is_available():
         device = 'cuda'
     else:
         device = 'cpu'
+    
 
     # Training
-    dataset_train = ArielMLDataset(lc_train_path, params_train_path, shuffle=True, start_ind=0,
-                                   max_size=train_size, transform=simple_transform, device=device)
+    dataset_train = ArielMLDataset(lc_train_path,
+                                   params_train_path,
+                                   shuffle=True,
+                                   start_ind=0,
+                                   max_size=train_size,
+                                   transform=simple_transform,
+                                   device=device,
+                                   seed=random_seed)
     # Validation
-    dataset_val = ArielMLDataset(lc_train_path, params_train_path, shuffle=True, start_ind=train_size,
-                                 max_size=val_size, transform=simple_transform, device=device)
+    dataset_val = ArielMLDataset(lc_train_path,
+                                 params_train_path,
+                                 shuffle=True,
+                                 start_ind=train_size,
+                                 max_size=val_size,
+                                 transform=simple_transform,
+                                 device=device,
+                                 seed=random_seed)
 
     # Loaders
-    batch_size = int(train_size / 4)
-    loader_train = DataLoader(
-        dataset_train, batch_size=batch_size, shuffle=True)
+    loader_train = DataLoader(dataset_train,
+                              batch_size=batch_size,
+                              shuffle=True)
     loader_val = DataLoader(dataset_val, batch_size=batch_size)
 
     # Define baseline model
-    baseline = Baseline(H1=H1, H2=H2).double().to(device)
+    # model = Baseline(H1=H1, H2=H2).double().to(device)
+    model = MLP().double().to(device)
+    # model = DilatedNet().double().to(device)
 
     # Define Loss, metric and optimizer
     loss_function = MSELoss()
     challenge_metric = ChallengeMetric()
-    opt = Adam(baseline.parameters())
+    opt = Adam(model.parameters(), lr=0.0005)
+    scheduler = StepLR(opt, step_size=60, gamma=0.25)
+    # scheduler = Scheduler(opt, partial(one_cycle, t_max=epochs, pivot=0.3))
 
     # Lists to record train and val scores
     train_losses = []
     val_losses = []
     val_scores = []
     best_val_score = 0.
+    count = 0
 
-    for epoch in range(1, 1+epochs):
+    for epoch in range(1, 1 + epochs):
         print("epoch", epoch)
         train_loss = 0
         val_loss = 0
         val_score = 0
-        baseline.train()
+        model.train()
         for k, item in enumerate(loader_train):
-            pred = baseline(item['lc'])
+            pred = model(item['lc'])
             loss = loss_function(item['target'], pred)
             opt.zero_grad()
             loss.backward()
             opt.step()
             train_loss += loss.detach().item()
         train_loss = train_loss / len(loader_train)
-        baseline.eval()
+        model.eval()
         for k, item in enumerate(loader_val):
-            pred = baseline(item['lc'])
+            pred = model(item['lc'])
             loss = loss_function(item['target'], pred)
             score = challenge_metric.score(item['target'], pred)
             val_loss += loss.detach().item()
@@ -74,13 +99,28 @@ def train():
 
         if epoch >= save_from and val_score > best_val_score:
             best_val_score = val_score
-            torch.save(baseline, project_dir / 'outputs/model_state.pt')
+            torch.save(model, project_dir / f'outputs/{save_name}/model_state.pt')
+            count += 1
+            if count >= 20:
+                break
+        else:
+            count = 0
 
-    np.savetxt(project_dir / 'outputs/train_losses.txt',
+        scheduler.step()
+        # scheduler.step(epoch)
+
+    np.savetxt(project_dir / f'outputs/{save_name}/train_losses.txt',
                np.array(train_losses))
-    np.savetxt(project_dir / 'outputs/val_losses.txt', np.array(val_losses))
-    np.savetxt(project_dir / 'outputs/val_scores.txt', np.array(val_scores))
-    torch.save(baseline, project_dir / 'outputs/model_state.pt')
+    np.savetxt(project_dir / f'outputs/{save_name}/val_losses.txt',
+               np.array(val_losses))
+    np.savetxt(project_dir / f'outputs/{save_name}/val_scores.txt',
+               np.array(val_scores))
+
 
 if __name__ == '__main__':
-    train()
+    start_time = time.time()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--save_name', type=str, default='MLP')
+    args = parser.parse_args()
+    train(args.save_name)
+    print(f'Training time: {(time.time()-start_time)/60:.3f} mins')

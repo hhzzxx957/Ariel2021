@@ -5,9 +5,9 @@ import torch
 
 from pathlib import Path
 from torch.utils.data import Dataset
-
-__author__ = "Mario Morvan"
-__email__ = "mario.morvan.18@ucl.ac.uk"
+from torch.nn import Module, Sequential
+from constants import *
+from collections import defaultdict
 
 class ArielMLDataset(Dataset):
     """Class for reading files for the Ariel ML data challenge 2021"""
@@ -137,3 +137,67 @@ class ChallengeMetric:
             weights = self.weights
 
         return (1e4 - 2 * (weights * y * torch.abs(pred - y)).sum() / weights.sum() * 1e6)
+
+class Baseline(Module):
+    """Baseline model for Ariel ML data challenge 2021"""
+
+    def __init__(self, H1=1024, H2=256, input_dim=n_wavelengths*n_timesteps, output_dim=n_wavelengths):
+        """Define the baseline model for the Ariel data challenge 2021
+
+        Args:
+            H1: int
+                first hidden dimension (default=1024)
+            H2: int
+                second hidden dimension (default=256)
+            input_dim: int
+                input dimension (default = 55*300)
+            ourput_dim: int
+                output dimension (default = 55)
+        """
+        super().__init__()
+        self.network = Sequential(torch.nn.Linear(input_dim, H1),
+                                  torch.nn.ReLU(),
+                                  torch.nn.Linear(H1, H2),
+                                  torch.nn.ReLU(),
+                                  torch.nn.Linear(H2, output_dim),
+                                  )
+
+    def __call__(self, x):
+        """Predict rp/rs from input tensor light curve x"""
+        out = torch.flatten(
+            x, start_dim=1)  # Need to flatten out the input light curves for this type network
+        out = self.network(out)
+        return out                             
+
+def cosine(epoch, t_max, ampl):
+    """Shifted and scaled cosine function."""
+    
+    t = epoch % t_max
+    return (1 + np.cos(np.pi*t/t_max))*ampl/2
+
+def inv_cosine(epoch, t_max, ampl):
+    """A cosine function reflected on X-axis."""
+    
+    return 1 - cosine(epoch, t_max, ampl)
+
+def one_cycle(epoch, t_max, a1=0.6, a2=1.0, pivot=0.3):
+    """A combined schedule with two cosine half-waves."""
+    
+    pct = epoch / t_max
+    if pct < pivot:
+        return inv_cosine(epoch, pivot*t_max, a1)
+    return cosine(epoch - pivot*t_max, (1-pivot)*t_max, a2)
+
+class Scheduler:
+    """Updates optimizer's learning rates using provided scheduling function."""
+    
+    def __init__(self, opt, schedule):
+        self.opt = opt
+        self.schedule = schedule
+        self.history = defaultdict(list)
+    
+    def step(self, t):
+        for i, group in enumerate(self.opt.param_groups):
+            lr = self.opt.defaults['lr'] * self.schedule(t)
+            group['lr'] = lr
+            self.history[i].append(lr)

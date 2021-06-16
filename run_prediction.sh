@@ -1,0 +1,1 @@
+nohup python -u prediction.py >> outputs/output.log 2>&1 &
