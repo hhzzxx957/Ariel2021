@@ -16,8 +16,8 @@ from utils import (ArielMLDataset, ChallengeMetric, Scheduler,
                    one_cycle, simple_transform)
 
 
-def train(save_name, log_dir):
-    torch.cuda.set_device(device_id)
+def train(save_name, log_dir, device_id=0):
+    torch.cuda.set_device(int(device_id))
     writer = SummaryWriter(log_dir=project_dir / f'outputs/{log_dir}')
 
     if torch.cuda.is_available():
@@ -53,15 +53,14 @@ def train(save_name, log_dir):
     # Define baseline model
     # model = Baseline(H1=H1, H2=H2).double().to(device)
     # model = MLP().double().to(device)
-    model = DilatedNet().double().to(device)
+    model = DilatedNet().to(device)
     print(model)
-    writer.add_graph(model)
 
     # Define Loss, metric and optimizer
-    loss_function = MSELoss() #L1loss, ChallengeMetric()
+    loss_function = L1Loss() #MSELoss() #L1Loss, ChallengeMetric()
     challenge_metric = ChallengeMetric()
-    opt = Adam(model.parameters(), lr=0.0005)
-    scheduler = StepLR(opt, step_size=60, gamma=0.25)
+    opt = Adam(model.parameters(), lr=lr)
+    scheduler = StepLR(opt, step_size=50, gamma=0.25)
     # scheduler = Scheduler(opt, partial(one_cycle, t_max=epochs, pivot=0.3))
 
     # Lists to record train and val scores
@@ -119,7 +118,6 @@ def train(save_name, log_dir):
                 print('early stop, best epoch: ', epoch-count)
                 break
 
-
         scheduler.step()
         # scheduler.step(epoch)
     writer.close()
@@ -136,8 +134,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--save_name', type=str, default='MLP')
     parser.add_argument('--log_dir', type=str, default='test')
+    parser.add_argument('--device_id', type=int, default=0)
     args = parser.parse_args()
-    train(args.save_name, args.log_dir)
+    train(args.save_name, args.log_dir, device_id=args.device_id)
     print(
         f'Parameters: {args.save_name}, train_size: {train_size}, batch_size: {batch_size}'
     )

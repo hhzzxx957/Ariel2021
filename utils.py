@@ -1,6 +1,7 @@
 """Define generic classes and functions to facilitate baseline construction"""
 import os
 import numpy as np
+import pandas as pd
 import torch
 
 from pathlib import Path
@@ -56,7 +57,68 @@ class ArielMLDataset(Dataset):
 
     def __getitem__(self, idx):
         item_lc_path = Path(self.lc_path) / self.files[idx]
+        lc = torch.from_numpy(np.loadtxt(item_lc_path)).type(torch.float32)
+        if self.transform:
+            lc = self.transform(lc)
+        if self.params_path is not None:
+            item_params_path = Path(self.params_path) / self.files[idx]
+            target = torch.from_numpy(np.loadtxt(item_params_path)).type(torch.float32)
+        else:
+            target = torch.Tensor()
+        return {'lc': lc.to(self.device),
+                'target': target.to(self.device)}
+
+class ArielMLFeatDataset(Dataset):
+    """Class for reading files for the Ariel ML data challenge 2021"""
+
+    def __init__(self, lc_path, params_path=None, feat_path=None, transform=None, start_ind=0,
+                 max_size=int(1e9), shuffle=True, seed=None, device=None):
+        """Create a pytorch dataset to read files for the Ariel ML Data challenge 2021
+
+        Args:
+            lc_path: str
+                path to the folder containing the light curves files
+            params_path: str
+                path to the folder containing the target transit depths (optional)
+            transform: callable
+                transformation to apply to the input light curves
+            start_ind: int
+                where to start reading the files from (after ordering)
+            max_size: int
+                maximum dataset size
+            shuffle: bool
+                whether to shuffle the dataset order or not
+            seed: int
+                numpy seed to set in case of shuffling
+            device: str
+                torch device
+        """
+        self.lc_path = lc_path
+        self.transform = transform
+        self.device = device
+
+        self.files = sorted(
+            [p for p in os.listdir(self.lc_path) if p.endswith('txt')])
+        if shuffle:
+            np.random.seed(seed)
+            np.random.shuffle(self.files)
+        self.files = self.files[start_ind:start_ind+max_size]
+
+        if params_path is not None:
+            self.params_path = params_path
+        else:
+            self.params_path = None
+            self.params_files = None
+        
+        self.feats = torch.from_numpy(pd.read_csv(feat_path).values)
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, idx):
+        item_lc_path = Path(self.lc_path) / self.files[idx]
         lc = torch.from_numpy(np.loadtxt(item_lc_path))
+        feat = self.feats[idx]
         if self.transform:
             lc = self.transform(lc)
         if self.params_path is not None:
@@ -65,8 +127,9 @@ class ArielMLDataset(Dataset):
         else:
             target = torch.Tensor()
         return {'lc': lc.to(self.device),
-                'target': target.to(self.device)}
-
+                'target': target.to(self.device),
+                'feat':feat.to(self.device),
+                }
 
 def simple_transform(x):
     """Perform a simple preprocessing of the input light curve array
@@ -195,9 +258,13 @@ class Scheduler:
         self.opt = opt
         self.schedule = schedule
         self.history = defaultdict(list)
+        self.lr = None
     
     def step(self, t):
         for i, group in enumerate(self.opt.param_groups):
-            lr = self.opt.defaults['lr'] * self.schedule(t)
-            group['lr'] = lr
-            self.history[i].append(lr)
+            self.lr = self.opt.defaults['lr'] * self.schedule(t)
+            group['lr'] = self.lr
+            self.history[i].append(self.lr)
+
+    def get_last_lr(self):
+        return self.lr

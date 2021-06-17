@@ -10,7 +10,7 @@ import argparse
 import gc
 
 
-def prediction(model_dir=None, save_name='MLP'):
+def prediction(model_dir=None, save_name='MLP', device_id=0):
     torch.cuda.set_device(device_id)
     if torch.cuda.is_available():
         device = 'cuda'
@@ -58,7 +58,8 @@ def prediction(model_dir=None, save_name='MLP'):
         item['lc'] = item['lc'].to(device)
         preds += [model(item['lc']).detach().cpu().numpy()]
 
-    eval_pred = torch.cat(preds)
+    # eval_pred = torch.cat(preds)
+    eval_pred = np.concatenate(preds, axis=0)
     print(eval_pred.shape)
 
     save_path = f'outputs/{save_name}/evaluation_{datetime.datetime.today().date()}.txt'
@@ -70,6 +71,7 @@ if __name__ == "__main__":
     start_time = time.time()
     parser = argparse.ArgumentParser()
     parser.add_argument('--save_name', type=str, default='MLP')
+    parser.add_argument('--device_id', type=int, default=0)
     args = parser.parse_args()
-    prediction(save_name=args.save_name)
+    prediction(save_name=args.save_name, device_id=args.device_id)
     print(f'Inference time: {(time.time()-start_time)/60:.3f} mins')

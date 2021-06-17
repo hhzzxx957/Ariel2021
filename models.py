@@ -97,9 +97,9 @@ class _SepConv1d(nn.Module):
     The separable convlution is a method to reduce number of the parameters 
     in the deep learning network for slight decrease in predictions quality.
     """
-    def __init__(self, ni, no, kernel, stride, pad):
+    def __init__(self, ni, no, kernel, stride, pad, dilation=0):
         super().__init__()
-        self.depthwise = nn.Conv1d(ni, ni, kernel, stride, padding=pad, groups=ni)
+        self.depthwise = nn.Conv1d(ni, ni, kernel, stride, padding=pad, dilation=dilation, groups=ni)
         self.pointwise = nn.Conv1d(ni, no, kernel_size=1)
 
     def forward(self, x):
@@ -159,6 +159,20 @@ class Classifier(nn.Module):
         out = self.out(t_in)
         return out
 
+class BlockLSTM(nn.Module):
+    def __init__(self, time_steps, num_variables, lstm_hs=256, dropout=0.8, attention=False):
+        super().__init__()
+        self.lstm = nn.LSTM(input_size=time_steps, hidden_size=lstm_hs, num_layers=num_variables)
+        self.dropout = nn.Dropout(p=dropout)
+    def forward(self, x):
+        # input is of the form (batch_size, num_variables, time_steps), e.g. (128, 1, 512)
+        x = torch.transpose(x, 0, 1)
+        # lstm layer is of the form (num_variables, batch_size, time_steps)
+        x = self.lstm(x)
+        # dropout layer input shape:
+        y = self.dropout(x)
+        # output shape is of the form ()
+        return y
 
 class UConv1d(nn.Module):
     """Implementes a 1-d convolution with 'batteries included'.
@@ -166,18 +180,20 @@ class UConv1d(nn.Module):
     The module adds (optionally) activation function and dropout layers right after
     a separable convolution layer.
     """
-    def __init__(self, ni, no, kernel, stride=1, pad=0, drop=None, bn=True, dilation=0,
+    def __init__(self, ni, no, kernel, stride=1, pad=0, drop=None, bn=True, pool=True, dilation=0,
                  activ=lambda: nn.PReLU()):
     
         super().__init__()
         assert drop is None or (0.0 < drop < 1.0)
-        layers = [nn.Conv1d(ni, no, kernel, stride, pad, dilation)]
+        layers = [_SepConv1d(ni, no, kernel, stride, pad, dilation)] #[nn.Conv1d(ni, no, kernel, stride, pad, dilation)]
         if activ:
             layers.append(activ())
         if bn:
             layers.append(nn.BatchNorm1d(no))
         if drop is not None:
             layers.append(nn.Dropout(drop))
+        if pool:
+            layers.append(nn.AvgPool1d(kernel_size=2, stride=2)) # AvgPool1d
         self.layers = nn.Sequential(*layers)
         
     def forward(self, x): 
@@ -196,10 +212,9 @@ class DilatedNet(nn.Module):
             UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
             UConv1d(128, 256, kernel=3, pad=2, dilation=dilation)
         )
-
         self.flatten = Flatten()
         self.mlp = nn.Sequential(
-            nn.Linear(256*n_timesteps, hidden_size),
+            nn.Linear(256*(n_timesteps//2**3), hidden_size), # 
             nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size//4),

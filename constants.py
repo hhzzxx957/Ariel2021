@@ -9,6 +9,7 @@ project_dir = pathlib.Path(__file__).parent.absolute()
 params_train_path = project_dir / "data/params_train/home/ucapats/Scratch/ml_data_challenge/training_set/params_train"
 lc_test_path = project_dir / "data/noisy_test/home/ucapats/Scratch/ml_data_challenge/test_set/noisy_test"
 lc_train_path = project_dir / "data/noisy_train/home/ucapats/Scratch/ml_data_challenge/training_set/noisy_train"
+feat_path = project_dir / "data"
 
 random_seed=2021
 
@@ -18,12 +19,13 @@ n_timesteps = 300
 train_size = 4096
 val_size = 1024
 test_size=1024
-batch_size = 256 #int(train_size / 4)
+batch_size = 512 #int(train_size / 4)
+lr = 0.0005
 
 epochs = 120
-save_from = 20
+save_from = 30
 
 H1 = 1024
 H2 = 256
 
-device_id = 0
+# device_id = 4

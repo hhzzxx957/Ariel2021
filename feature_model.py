@@ -3,6 +3,11 @@ import pandas as pd
 import numpy as np
 res = np.loadtxt('/data-nbd/ml_dataset/timeseries/pkdd_ml_data_challenge2/outputs/baseline/evaluation_2021-06-15.txt')
 print(res.shape)
+
+# concate result
 # %%
-from models import MLP
-model = MLP(num_mlp_layers = 3, emb_dim = 400)
+import numpy as np
+import pandas as pd
+df = pd.read_csv('/data-nbd/ml_dataset/timeseries/pkdd_ml_data_challenge2/data/test_properties_df.csv')
+
+# %%
