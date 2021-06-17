@@ -1,6 +1,7 @@
 # Byte-compiled / optimized / DLL files
 data/
 outputs/
+ml_data_challenge_database/
 *.zip
 __pycache__/
 *.py[cod]

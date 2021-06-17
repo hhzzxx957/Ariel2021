@@ -1,19 +1,19 @@
 """Define and train the baseline model"""
+import argparse
 import time
 from functools import partial
-import argparse
+
 import numpy as np
 import torch
-from torch.nn import MSELoss, L1Loss
+from torch.nn import L1Loss, MSELoss
 from torch.optim import Adam
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from constants import *
-from models import MLP, Baseline, DilatedNet
-from utils import (ArielMLDataset, ChallengeMetric, Scheduler,
-                   one_cycle, simple_transform)
+from models import MLP, Baseline, DilatedNet, DilatedCNNLSTMNet, DilatedFeatNet
+from utils import ArielMLDataset, ChallengeMetric, Scheduler, simple_transform, one_cycle
 
 
 def train(save_name, log_dir, device_id=0):
@@ -50,23 +50,21 @@ def train(save_name, log_dir, device_id=0):
                               shuffle=True)
     loader_val = DataLoader(dataset_val, batch_size=batch_size)
 
-    # Define baseline model
+    # Define model
+    # DilatedCNNLSTMNet, DilatedFeatNet
     # model = Baseline(H1=H1, H2=H2).double().to(device)
     # model = MLP().double().to(device)
     model = DilatedNet().to(device)
+    # model = DilatedCNNLSTMNet().to(device)
     print(model)
 
     # Define Loss, metric and optimizer
-    loss_function = L1Loss() #MSELoss() #L1Loss, ChallengeMetric()
+    loss_function = L1Loss()  #MSELoss() #L1Loss, ChallengeMetric()
     challenge_metric = ChallengeMetric()
     opt = Adam(model.parameters(), lr=lr)
-    scheduler = StepLR(opt, step_size=50, gamma=0.25)
-    # scheduler = Scheduler(opt, partial(one_cycle, t_max=epochs, pivot=0.3))
+    # scheduler = StepLR(opt, step_size=50, gamma=0.25)
+    scheduler = Scheduler(opt, partial(one_cycle, t_max=epochs, pivot=0.3))
 
-    # Lists to record train and val scores
-    # train_losses = []
-    # val_losses = []
-    # val_scores = []
     best_val_score = 0.
     count = 0
 
@@ -101,32 +99,23 @@ def train(save_name, log_dir, device_id=0):
         print('Val loss', round(val_loss, 6))
         print('Val score', round(val_score, 2))
         print('learning rate', scheduler.get_last_lr())
-        # train_losses += [train_loss]
-        # val_losses += [val_loss]
-        # val_scores += [val_score]
 
         # early stop
         if val_score > best_val_score:
             best_val_score = val_score
             if epoch >= save_from:
                 torch.save(model,
-                        project_dir / f'outputs/{save_name}/model_state.pt')
+                           project_dir / f'outputs/{save_name}/model_state.pt')
             count = 0
         else:
             count += 1
             if count >= 20:
-                print('early stop, best epoch: ', epoch-count)
+                print('early stop, best epoch: ', epoch - count)
                 break
 
-        scheduler.step()
-        # scheduler.step(epoch)
+        # scheduler.step()
+        scheduler.step(epoch)
     writer.close()
-    # np.savetxt(project_dir / f'outputs/{save_name}/train_losses.txt',
-    #            np.array(train_losses))
-    # np.savetxt(project_dir / f'outputs/{save_name}/val_losses.txt',
-    #            np.array(val_losses))
-    # np.savetxt(project_dir / f'outputs/{save_name}/val_scores.txt',
-    #            np.array(val_scores))
 
 
 if __name__ == '__main__':

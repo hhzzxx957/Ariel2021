@@ -1,20 +1,28 @@
 """Define generic classes and functions to facilitate baseline construction"""
 import os
+from collections import defaultdict
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import torch
-
-from pathlib import Path
-from torch.utils.data import Dataset
 from torch.nn import Module, Sequential
+from torch.utils.data import Dataset
+
 from constants import *
-from collections import defaultdict
+
 
 class ArielMLDataset(Dataset):
     """Class for reading files for the Ariel ML data challenge 2021"""
-
-    def __init__(self, lc_path, params_path=None, transform=None, start_ind=0,
-                 max_size=int(1e9), shuffle=True, seed=None, device=None):
+    def __init__(self,
+                 lc_path,
+                 params_path=None,
+                 transform=None,
+                 start_ind=0,
+                 max_size=int(1e9),
+                 shuffle=True,
+                 seed=None,
+                 device=None):
         """Create a pytorch dataset to read files for the Ariel ML Data challenge 2021
 
         Args:
@@ -44,7 +52,7 @@ class ArielMLDataset(Dataset):
         if shuffle:
             np.random.seed(seed)
             np.random.shuffle(self.files)
-        self.files = self.files[start_ind:start_ind+max_size]
+        self.files = self.files[start_ind:start_ind + max_size]
 
         if params_path is not None:
             self.params_path = params_path
@@ -62,17 +70,25 @@ class ArielMLDataset(Dataset):
             lc = self.transform(lc)
         if self.params_path is not None:
             item_params_path = Path(self.params_path) / self.files[idx]
-            target = torch.from_numpy(np.loadtxt(item_params_path)).type(torch.float32)
+            target = torch.from_numpy(np.loadtxt(item_params_path)).type(
+                torch.float32)
         else:
             target = torch.Tensor()
-        return {'lc': lc.to(self.device),
-                'target': target.to(self.device)}
+        return {'lc': lc.to(self.device), 'target': target.to(self.device)}
+
 
 class ArielMLFeatDataset(Dataset):
     """Class for reading files for the Ariel ML data challenge 2021"""
-
-    def __init__(self, lc_path, params_path=None, feat_path=None, transform=None, start_ind=0,
-                 max_size=int(1e9), shuffle=True, seed=None, device=None):
+    def __init__(self,
+                 lc_path,
+                 params_path=None,
+                 feat_path=None,
+                 transform=None,
+                 start_ind=0,
+                 max_size=int(1e9),
+                 shuffle=True,
+                 seed=None,
+                 device=None):
         """Create a pytorch dataset to read files for the Ariel ML Data challenge 2021
 
         Args:
@@ -102,14 +118,14 @@ class ArielMLFeatDataset(Dataset):
         if shuffle:
             np.random.seed(seed)
             np.random.shuffle(self.files)
-        self.files = self.files[start_ind:start_ind+max_size]
+        self.files = self.files[start_ind:start_ind + max_size]
 
         if params_path is not None:
             self.params_path = params_path
         else:
             self.params_path = None
             self.params_files = None
-        
+
         self.feats = torch.from_numpy(pd.read_csv(feat_path).values)
 
     def __len__(self):
@@ -126,10 +142,12 @@ class ArielMLFeatDataset(Dataset):
             target = torch.from_numpy(np.loadtxt(item_params_path))
         else:
             target = torch.Tensor()
-        return {'lc': lc.to(self.device),
-                'target': target.to(self.device),
-                'feat':feat.to(self.device),
-                }
+        return {
+            'lc': lc.to(self.device),
+            'target': target.to(self.device),
+            'feat': feat.to(self.device),
+        }
+
 
 def simple_transform(x):
     """Perform a simple preprocessing of the input light curve array
@@ -146,10 +164,15 @@ def simple_transform(x):
     out /= 0.04
     return out
 
+def subavg_transform(x):
+    out = x.clone()
+    avg_vals = np.load('/data-nbd/ml_dataset/timeseries/pkdd_ml_data_challenge2/data/average_signal.npy')
+    out -= avg_vals
+    out /= np.std(out)
+    return out
 
 class ChallengeMetric:
     """Class for challenge metric"""
-
     def __init__(self, weights=None):
         """Create a callable object close to the Challenge's metric score
 
@@ -199,12 +222,18 @@ class ChallengeMetric:
         else:
             weights = self.weights
 
-        return (1e4 - 2 * (weights * y * torch.abs(pred - y)).sum() / weights.sum() * 1e6)
+        return (
+            1e4 - 2 *
+            (weights * y * torch.abs(pred - y)).sum() / weights.sum() * 1e6)
+
 
 class Baseline(Module):
     """Baseline model for Ariel ML data challenge 2021"""
-
-    def __init__(self, H1=1024, H2=256, input_dim=n_wavelengths*n_timesteps, output_dim=n_wavelengths):
+    def __init__(self,
+                 H1=1024,
+                 H2=256,
+                 input_dim=n_wavelengths * n_timesteps,
+                 output_dim=n_wavelengths):
         """Define the baseline model for the Ariel data challenge 2021
 
         Args:
@@ -218,48 +247,53 @@ class Baseline(Module):
                 output dimension (default = 55)
         """
         super().__init__()
-        self.network = Sequential(torch.nn.Linear(input_dim, H1),
-                                  torch.nn.ReLU(),
-                                  torch.nn.Linear(H1, H2),
-                                  torch.nn.ReLU(),
-                                  torch.nn.Linear(H2, output_dim),
-                                  )
+        self.network = Sequential(
+            torch.nn.Linear(input_dim, H1),
+            torch.nn.ReLU(),
+            torch.nn.Linear(H1, H2),
+            torch.nn.ReLU(),
+            torch.nn.Linear(H2, output_dim),
+        )
 
     def __call__(self, x):
         """Predict rp/rs from input tensor light curve x"""
         out = torch.flatten(
-            x, start_dim=1)  # Need to flatten out the input light curves for this type network
+            x, start_dim=1
+        )  # Need to flatten out the input light curves for this type network
         out = self.network(out)
-        return out                             
+        return out
+
 
 def cosine(epoch, t_max, ampl):
     """Shifted and scaled cosine function."""
-    
+
     t = epoch % t_max
-    return (1 + np.cos(np.pi*t/t_max))*ampl/2
+    return (1 + np.cos(np.pi * t / t_max)) * ampl / 2
+
 
 def inv_cosine(epoch, t_max, ampl):
     """A cosine function reflected on X-axis."""
-    
+
     return 1 - cosine(epoch, t_max, ampl)
+
 
 def one_cycle(epoch, t_max, a1=0.6, a2=1.0, pivot=0.3):
     """A combined schedule with two cosine half-waves."""
-    
+
     pct = epoch / t_max
     if pct < pivot:
-        return inv_cosine(epoch, pivot*t_max, a1)
-    return cosine(epoch - pivot*t_max, (1-pivot)*t_max, a2)
+        return inv_cosine(epoch, pivot * t_max, a1)
+    return cosine(epoch - pivot * t_max, (1 - pivot) * t_max, a2)
+
 
 class Scheduler:
     """Updates optimizer's learning rates using provided scheduling function."""
-    
     def __init__(self, opt, schedule):
         self.opt = opt
         self.schedule = schedule
         self.history = defaultdict(list)
         self.lr = None
-    
+
     def step(self, t):
         for i, group in enumerate(self.opt.param_groups):
             self.lr = self.opt.defaults['lr'] * self.schedule(t)

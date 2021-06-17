@@ -1,13 +1,18 @@
 import numpy as np
 import torch
-from torch.nn import Module, Sequential
-from constants import n_wavelengths, n_timesteps
 from torch import nn
+from torch.nn import Module, Sequential
+
+from constants import n_timesteps, n_wavelengths
+
 
 class Baseline(Module):
     """Baseline model for Ariel ML data challenge 2021"""
-
-    def __init__(self, H1=1024, H2=256, input_dim=n_wavelengths*n_timesteps, output_dim=n_wavelengths):
+    def __init__(self,
+                 H1=1024,
+                 H2=256,
+                 input_dim=n_wavelengths * n_timesteps,
+                 output_dim=n_wavelengths):
         """Define the baseline model for the Ariel data challenge 2021
 
         Args:
@@ -21,50 +26,58 @@ class Baseline(Module):
                 output dimension (default = 55)
         """
         super().__init__()
-        self.network = Sequential(torch.nn.Linear(input_dim, H1),
-                                  torch.nn.ReLU(),
-                                  torch.nn.Linear(H1, H2),
-                                  torch.nn.ReLU(),
-                                  torch.nn.Linear(H2, output_dim),
-                                  )
+        self.network = Sequential(
+            torch.nn.Linear(input_dim, H1),
+            torch.nn.ReLU(),
+            torch.nn.Linear(H1, H2),
+            torch.nn.ReLU(),
+            torch.nn.Linear(H2, output_dim),
+        )
 
     def __call__(self, x):
         """Predict rp/rs from input tensor light curve x"""
         out = torch.flatten(
-            x, start_dim=1)  # Need to flatten out the input light curves for this type network
+            x, start_dim=1
+        )  # Need to flatten out the input light curves for this type network
         out = self.network(out)
-        return out                             
+        return out
+
 
 class MLP(torch.nn.Module):
     """ MLP model"""
-    def __init__(self, num_mlp_layers = 3, emb_dim = 400, drop_ratio = 0, input_dim=n_wavelengths*n_timesteps, output_dim=n_wavelengths):
+    def __init__(self,
+                 num_mlp_layers=3,
+                 emb_dim=400,
+                 drop_ratio=0,
+                 input_dim=n_wavelengths * n_timesteps,
+                 output_dim=n_wavelengths):
         super(MLP, self).__init__()
         self.num_mlp_layers = num_mlp_layers
         self.emb_dim = emb_dim
-        self.drop_ratio = drop_ratio 
+        self.drop_ratio = drop_ratio
 
         # mlp
         input_module_list = [
             torch.nn.Linear(input_dim, self.emb_dim),
             torch.nn.BatchNorm1d(self.emb_dim),
             torch.nn.ReLU(),
-            torch.nn.Dropout(p = self.drop_ratio),
+            torch.nn.Dropout(p=self.drop_ratio),
         ]
 
         self.input_fc = torch.nn.Sequential(*input_module_list)
 
         module_list = []
         for _ in range(self.num_mlp_layers - 1):
-            module_list += [torch.nn.Linear(self.emb_dim, self.emb_dim),
-            torch.nn.BatchNorm1d(self.emb_dim),
-            torch.nn.ReLU(),
-            torch.nn.Dropout(p = self.drop_ratio)]
+            module_list += [
+                torch.nn.Linear(self.emb_dim, self.emb_dim),
+                torch.nn.BatchNorm1d(self.emb_dim),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(p=self.drop_ratio)
+            ]
 
         # module_list = [torch.nn.Linear(input_dim, 1)]
 
-        self.mlp = torch.nn.Sequential(
-            *module_list
-        )
+        self.mlp = torch.nn.Sequential(*module_list)
 
         # relu is applied in the last layer to ensure positivity
         output_module_list = [torch.nn.Linear(self.emb_dim, output_dim)]
@@ -75,21 +88,21 @@ class MLP(torch.nn.Module):
         x = self.input_fc(x)
         x = self.mlp(x)
         output = self.output_fc(x)
-        return output 
+        return output
 
 
 # Implemented
 class Flatten(nn.Module):
     """Converts N-dimensional tensor into 'flat' one."""
-
     def __init__(self, keep_batch_dim=True):
         super().__init__()
         self.keep_batch_dim = keep_batch_dim
 
     def forward(self, x):
         if self.keep_batch_dim:
-            return x.view(x.size(0), -1)
-        return x.view(-1)
+            return x.reshape(x.size(0), -1)
+        return x.reshape(-1)
+
 
 class _SepConv1d(nn.Module):
     """A simple separable convolution implementation.
@@ -99,11 +112,18 @@ class _SepConv1d(nn.Module):
     """
     def __init__(self, ni, no, kernel, stride, pad, dilation=0):
         super().__init__()
-        self.depthwise = nn.Conv1d(ni, ni, kernel, stride, padding=pad, dilation=dilation, groups=ni)
+        self.depthwise = nn.Conv1d(ni,
+                                   ni,
+                                   kernel,
+                                   stride,
+                                   padding=pad,
+                                   dilation=dilation,
+                                   groups=ni)
         self.pointwise = nn.Conv1d(ni, no, kernel_size=1)
 
     def forward(self, x):
         return self.pointwise(self.depthwise(x))
+
 
 class SepConv1d(nn.Module):
     """Implementes a 1-d convolution with 'batteries included'.
@@ -111,9 +131,15 @@ class SepConv1d(nn.Module):
     The module adds (optionally) activation function and dropout layers right after
     a separable convolution layer.
     """
-    def __init__(self, ni, no, kernel, stride, pad, drop=None,
+    def __init__(self,
+                 ni,
+                 no,
+                 kernel,
+                 stride,
+                 pad,
+                 drop=None,
                  activ=lambda: nn.ReLU(inplace=True)):
-    
+
         super().__init__()
         assert drop is None or (0.0 < drop < 1.0)
         layers = [_SepConv1d(ni, no, kernel, stride, pad)]
@@ -122,36 +148,35 @@ class SepConv1d(nn.Module):
         if drop is not None:
             layers.append(nn.Dropout(drop))
         self.layers = nn.Sequential(*layers)
-        
-    def forward(self, x): 
+
+    def forward(self, x):
         return self.layers(x)
+
 
 class Classifier(nn.Module):
     def __init__(self, raw_ni, fft_ni, no, drop=.5):
         super().__init__()
-        
-        self.raw = nn.Sequential(
-            SepConv1d(raw_ni,  32, 8, 2, 3, drop=drop),
-            SepConv1d(    32,  64, 8, 4, 2, drop=drop),
-            SepConv1d(    64, 128, 8, 4, 2, drop=drop),
-            SepConv1d(   128, 256, 8, 4, 2),
-            Flatten(),
-            nn.Dropout(drop), nn.Linear(256, 64), nn.ReLU(inplace=True),
-            nn.Dropout(drop), nn.Linear( 64, 64), nn.ReLU(inplace=True))
-        
-        self.fft = nn.Sequential(
-            SepConv1d(fft_ni,  32, 8, 2, 4, drop=drop),
-            SepConv1d(    32,  64, 8, 2, 4, drop=drop),
-            SepConv1d(    64, 128, 8, 4, 4, drop=drop),
-            SepConv1d(   128, 128, 8, 4, 4, drop=drop),
-            SepConv1d(   128, 256, 8, 2, 3),
-            Flatten(),
-            nn.Dropout(drop), nn.Linear(256, 64), nn.ReLU(inplace=True),
-            nn.Dropout(drop), nn.Linear( 64, 64), nn.ReLU(inplace=True))
-        
-        self.out = nn.Sequential(
-            nn.Linear(128, 64), nn.ReLU(inplace=True), nn.Linear(64, no))
-        
+
+        self.raw = nn.Sequential(SepConv1d(raw_ni, 32, 8, 2, 3, drop=drop),
+                                 SepConv1d(32, 64, 8, 4, 2, drop=drop),
+                                 SepConv1d(64, 128, 8, 4, 2, drop=drop),
+                                 SepConv1d(128, 256, 8, 4, 2), Flatten(),
+                                 nn.Dropout(drop), nn.Linear(256, 64),
+                                 nn.ReLU(inplace=True), nn.Dropout(drop),
+                                 nn.Linear(64, 64), nn.ReLU(inplace=True))
+
+        self.fft = nn.Sequential(SepConv1d(fft_ni, 32, 8, 2, 4, drop=drop),
+                                 SepConv1d(32, 64, 8, 2, 4, drop=drop),
+                                 SepConv1d(64, 128, 8, 4, 4, drop=drop),
+                                 SepConv1d(128, 128, 8, 4, 4, drop=drop),
+                                 SepConv1d(128, 256, 8, 2, 3), Flatten(),
+                                 nn.Dropout(drop), nn.Linear(256, 64),
+                                 nn.ReLU(inplace=True), nn.Dropout(drop),
+                                 nn.Linear(64, 64), nn.ReLU(inplace=True))
+
+        self.out = nn.Sequential(nn.Linear(128, 64), nn.ReLU(inplace=True),
+                                 nn.Linear(64, no))
+
     def forward(self, t_raw, t_fft):
         raw_out = self.raw(t_raw)
         fft_out = self.fft(t_fft)
@@ -159,33 +184,27 @@ class Classifier(nn.Module):
         out = self.out(t_in)
         return out
 
-class BlockLSTM(nn.Module):
-    def __init__(self, time_steps, num_variables, lstm_hs=256, dropout=0.8, attention=False):
-        super().__init__()
-        self.lstm = nn.LSTM(input_size=time_steps, hidden_size=lstm_hs, num_layers=num_variables)
-        self.dropout = nn.Dropout(p=dropout)
-    def forward(self, x):
-        # input is of the form (batch_size, num_variables, time_steps), e.g. (128, 1, 512)
-        x = torch.transpose(x, 0, 1)
-        # lstm layer is of the form (num_variables, batch_size, time_steps)
-        x = self.lstm(x)
-        # dropout layer input shape:
-        y = self.dropout(x)
-        # output shape is of the form ()
-        return y
-
 class UConv1d(nn.Module):
     """Implementes a 1-d convolution with 'batteries included'.
     
     The module adds (optionally) activation function and dropout layers right after
     a separable convolution layer.
     """
-    def __init__(self, ni, no, kernel, stride=1, pad=0, drop=None, bn=True, pool=True, dilation=0,
+    def __init__(self,
+                 ni,
+                 no,
+                 kernel,
+                 stride=1,
+                 pad=0,
+                 drop=None,
+                 bn=True,
+                 pool=True,
+                 dilation=0,
                  activ=lambda: nn.PReLU()):
-    
+
         super().__init__()
         assert drop is None or (0.0 < drop < 1.0)
-        layers = [_SepConv1d(ni, no, kernel, stride, pad, dilation)] #[nn.Conv1d(ni, no, kernel, stride, pad, dilation)]
+        layers = [nn.Conv1d(ni, no, kernel, stride, pad, dilation)]  #[_SepConv1d(ni, no, kernel, stride, pad, dilation)] #  #
         if activ:
             layers.append(activ())
         if bn:
@@ -193,11 +212,12 @@ class UConv1d(nn.Module):
         if drop is not None:
             layers.append(nn.Dropout(drop))
         if pool:
-            layers.append(nn.AvgPool1d(kernel_size=2, stride=2)) # AvgPool1d
+            layers.append(nn.AvgPool1d(kernel_size=2, stride=2))  # AvgPool1d
         self.layers = nn.Sequential(*layers)
-        
-    def forward(self, x): 
+
+    def forward(self, x):
         return self.layers(x)
+
 
 class DilatedNet(nn.Module):
     def __init__(self, in_channel=55, hidden_size=2000, dilation=2):
@@ -210,17 +230,16 @@ class DilatedNet(nn.Module):
         self.cnn = nn.Sequential(
             UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
             UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
-            UConv1d(128, 256, kernel=3, pad=2, dilation=dilation)
-        )
+            UConv1d(128, 256, kernel=3, pad=2, dilation=dilation))
         self.flatten = Flatten()
         self.mlp = nn.Sequential(
-            nn.Linear(256*(n_timesteps//2**3), hidden_size), # 
+            nn.Linear(256 * (n_timesteps // 2**3), hidden_size),  # 
             nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size//4),
-            nn.BatchNorm1d(hidden_size//4),
+            nn.Linear(hidden_size, hidden_size // 4),
+            nn.BatchNorm1d(hidden_size // 4),
             nn.ReLU(),
-            nn.Linear(hidden_size//4, in_channel),
+            nn.Linear(hidden_size // 4, in_channel),
         )
 
     def forward(self, x):
@@ -231,5 +250,113 @@ class DilatedNet(nn.Module):
         """
         out = self.cnn(x)
         out = self.flatten(out)
+        out = self.mlp(out)
+        return out
+
+class DilatedFeatNet(nn.Module):
+    def __init__(self, in_channel=55, hidden_size=2000, dilation=2):
+        """
+        """
+        super().__init__()
+        self.dilation = dilation
+        self.hidden_size = hidden_size
+        # Input
+        self.cnn = nn.Sequential(
+            UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
+            UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
+            UConv1d(128, 256, kernel=3, pad=2, dilation=dilation))
+        self.flatten = Flatten()
+        self.mlp = nn.Sequential(
+            nn.Linear(256 * (n_timesteps // 2**3), hidden_size),  # 
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size // 4),
+            nn.BatchNorm1d(hidden_size // 4),
+            nn.ReLU(),
+        )
+        self.mlpout = nn.Sequential(
+            nn.Linear(hidden_size//4 + 6, hidden_size // 8),
+            nn.BatchNorm1d(hidden_size // 8),
+            nn.ReLU(),
+            nn.Linear(hidden_size // 8, in_channel),
+        )
+
+    def forward(self, item):
+        """
+        :param x: Pytorch Variable
+        :return:
+        """
+        x, feat = item
+        out = self.cnn(x)
+        out = self.flatten(out)
+        out = self.mlp(out)
+        out = torch.concat([x, feat], axis=1)
+        out = self.mlpout(out)
+        return out
+
+
+class BlockLSTM(nn.Module):
+    def __init__(self,
+                 time_steps,
+                 num_variables,
+                 lstm_hs=256,
+                 dropout=0.2,):
+        super().__init__()
+        self.lstm = nn.LSTM(input_size=time_steps,
+                            hidden_size=lstm_hs,
+                            num_layers=num_variables)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x):
+        # input is of the form (batch_size, num_variables, time_steps), e.g. (128, 1, 512)
+        x = torch.transpose(x, 0, 1)
+        # lstm layer is of the form (num_variables, batch_size, time_steps)
+        output,(h_n,c_n) = self.lstm(x)
+        # dropout layer input shape:
+        h_n = self.dropout(h_n)
+        # output shape is of the form ()
+        h_n = torch.transpose(h_n, 0, 1)
+        return h_n
+
+class DilatedCNNLSTMNet(nn.Module):
+    def __init__(self, in_channel=55, hidden_size=2000, dilation=2):
+        """
+        """
+        super().__init__()
+        self.dilation = dilation
+        self.hidden_size = hidden_size
+        # Input
+        self.lstm_block = BlockLSTM(300, 2)
+        self.flatten1 = Flatten()
+        self.cnn = nn.Sequential(
+            UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
+            UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
+            UConv1d(128, 256, kernel=3, pad=2, dilation=dilation))
+        self.flatten2 = Flatten()
+        self.mlp = nn.Sequential(
+            nn.Linear(256 * (n_timesteps // 2**3)+256*2, hidden_size),  # 
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size // 4),
+            nn.BatchNorm1d(hidden_size // 4),
+            nn.ReLU(),
+            nn.Linear(hidden_size // 4, in_channel)
+        )
+
+    def forward(self, x):
+        """
+
+        :param x: Pytorch Variable
+        :return:
+        """
+        print(x.shape)
+        lstm_out = self.lstm_block(x)
+        print(lstm_out.shape)
+        lstm_out = self.flatten1(lstm_out)
+        print(lstm_out.shape)
+        cnn_out = self.cnn(x)
+        cnn_out = self.flatten2(cnn_out)
+        print(cnn_out.shape)
+        out = torch.cat([lstm_out, cnn_out], axis=1)
         out = self.mlp(out)
         return out

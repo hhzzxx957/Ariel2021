@@ -1,13 +1,15 @@
-import torch
-import numpy as np
-from constants import *
-from torch.utils.data.dataloader import DataLoader
-from utils import ArielMLDataset, ChallengeMetric, simple_transform
-import datetime
-from tqdm import tqdm
-import time
 import argparse
+import datetime
 import gc
+import time
+
+import numpy as np
+import torch
+from torch.utils.data.dataloader import DataLoader
+from tqdm import tqdm
+
+from constants import *
+from utils import ArielMLDataset, ChallengeMetric, simple_transform
 
 
 def prediction(model_dir=None, save_name='MLP', device_id=0):
@@ -27,7 +29,7 @@ def prediction(model_dir=None, save_name='MLP', device_id=0):
                                   transform=simple_transform)
     loader_test = DataLoader(dataset_test, batch_size=batch_size)
     loader_eval = DataLoader(dataset_eval, batch_size=1000, shuffle=False)
-    
+
     if model_dir is None:
         model_dir = f'outputs/{save_name}/model_state.pt'
     model = torch.load(model_dir, map_location=device)

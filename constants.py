@@ -20,12 +20,10 @@ train_size = 4096
 val_size = 1024
 test_size=1024
 batch_size = 512 #int(train_size / 4)
-lr = 0.0005
+lr = 0.001
 
 epochs = 120
-save_from = 30
+save_from = 40
 
 H1 = 1024
 H2 = 256
-
-# device_id = 4
