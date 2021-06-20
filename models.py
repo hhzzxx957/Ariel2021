@@ -104,86 +104,6 @@ class Flatten(nn.Module):
         return x.reshape(-1)
 
 
-class _SepConv1d(nn.Module):
-    """A simple separable convolution implementation.
-    
-    The separable convlution is a method to reduce number of the parameters 
-    in the deep learning network for slight decrease in predictions quality.
-    """
-    def __init__(self, ni, no, kernel, stride, pad, dilation=0):
-        super().__init__()
-        self.depthwise = nn.Conv1d(ni,
-                                   ni,
-                                   kernel,
-                                   stride,
-                                   padding=pad,
-                                   dilation=dilation,
-                                   groups=ni)
-        self.pointwise = nn.Conv1d(ni, no, kernel_size=1)
-
-    def forward(self, x):
-        return self.pointwise(self.depthwise(x))
-
-
-class SepConv1d(nn.Module):
-    """Implementes a 1-d convolution with 'batteries included'.
-    
-    The module adds (optionally) activation function and dropout layers right after
-    a separable convolution layer.
-    """
-    def __init__(self,
-                 ni,
-                 no,
-                 kernel,
-                 stride,
-                 pad,
-                 drop=None,
-                 activ=lambda: nn.ReLU(inplace=True)):
-
-        super().__init__()
-        assert drop is None or (0.0 < drop < 1.0)
-        layers = [_SepConv1d(ni, no, kernel, stride, pad)]
-        if activ:
-            layers.append(activ())
-        if drop is not None:
-            layers.append(nn.Dropout(drop))
-        self.layers = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.layers(x)
-
-
-class Classifier(nn.Module):
-    def __init__(self, raw_ni, fft_ni, no, drop=.5):
-        super().__init__()
-
-        self.raw = nn.Sequential(SepConv1d(raw_ni, 32, 8, 2, 3, drop=drop),
-                                 SepConv1d(32, 64, 8, 4, 2, drop=drop),
-                                 SepConv1d(64, 128, 8, 4, 2, drop=drop),
-                                 SepConv1d(128, 256, 8, 4, 2), Flatten(),
-                                 nn.Dropout(drop), nn.Linear(256, 64),
-                                 nn.ReLU(inplace=True), nn.Dropout(drop),
-                                 nn.Linear(64, 64), nn.ReLU(inplace=True))
-
-        self.fft = nn.Sequential(SepConv1d(fft_ni, 32, 8, 2, 4, drop=drop),
-                                 SepConv1d(32, 64, 8, 2, 4, drop=drop),
-                                 SepConv1d(64, 128, 8, 4, 4, drop=drop),
-                                 SepConv1d(128, 128, 8, 4, 4, drop=drop),
-                                 SepConv1d(128, 256, 8, 2, 3), Flatten(),
-                                 nn.Dropout(drop), nn.Linear(256, 64),
-                                 nn.ReLU(inplace=True), nn.Dropout(drop),
-                                 nn.Linear(64, 64), nn.ReLU(inplace=True))
-
-        self.out = nn.Sequential(nn.Linear(128, 64), nn.ReLU(inplace=True),
-                                 nn.Linear(64, no))
-
-    def forward(self, t_raw, t_fft):
-        raw_out = self.raw(t_raw)
-        fft_out = self.fft(t_fft)
-        t_in = torch.cat([raw_out, fft_out], dim=1)
-        out = self.out(t_in)
-        return out
-
 class UConv1d(nn.Module):
     """Implementes a 1-d convolution with 'batteries included'.
     
@@ -219,28 +139,89 @@ class UConv1d(nn.Module):
         return self.layers(x)
 
 
+class SkipConv1d(nn.Module):
+    """
+    """
+    def __init__(self,
+                 ni,
+                 kernel,
+                 stride=1,
+                 pad=0,
+                 drop=None,
+                 bn=True,
+                 dilation=0,
+                 activ=lambda: nn.PReLU()):
+
+        super().__init__()
+        assert drop is None or (0.0 < drop < 1.0)
+        layers = [nn.Conv1d(ni, ni, kernel, stride, pad, dilation)]
+        layers2 = [nn.Conv1d(ni, ni, kernel, stride, pad, dilation)]
+        if bn:
+            layers.append(nn.BatchNorm1d(ni))
+            layers2.append(nn.BatchNorm1d(ni))
+        if activ:
+            layers.append(activ())
+        self.layers = nn.Sequential(*layers)
+        self.layers2 = nn.Sequential(*layers2)
+        self.activ = activ()
+
+    def forward(self, x):
+        identity = x
+        out = self.layers(x)
+        out = self.layers2(out)
+        out = self.activ(out + identity)
+        return out
+
 class DilatedNet(nn.Module):
-    def __init__(self, in_channel=55, hidden_size=2000, dilation=2):
+    def __init__(self, in_channel=55, hidden_size=2000, dilation=2, add_feat=False):
         """
         """
         super(DilatedNet, self).__init__()
         self.dilation = dilation
         self.hidden_size = hidden_size
+        self.add_feat = add_feat
         # Input
         self.cnn = nn.Sequential(
             UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
+            UConv1d(64, 64, kernel=3, pad=2, dilation=dilation),
             UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
-            UConv1d(128, 256, kernel=3, pad=2, dilation=dilation))
+            UConv1d(128, 128, kernel=3, pad=2, dilation=dilation),
+            UConv1d(128, 256, kernel=3, pad=2, dilation=dilation),
+            UConv1d(256, 256, kernel=3, pad=2, dilation=dilation),
+            )
         self.flatten = Flatten()
+
         self.mlp = nn.Sequential(
-            nn.Linear(256 * (n_timesteps // 2**3), hidden_size),  # 
+            nn.Linear(256 * (n_timesteps // 2**6), hidden_size),  # 
             nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size // 4),
             nn.BatchNorm1d(hidden_size // 4),
             nn.ReLU(),
-            nn.Linear(hidden_size // 4, in_channel),
         )
+        self.mlp2 = nn.Sequential(
+            nn.Linear(6, 64),  # 
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Linear(64, 16),
+            nn.BatchNorm1d(16),
+            nn.ReLU(),
+        )
+        if add_feat:
+            mlpout_input_size = hidden_size // 4 + 16
+        else:
+            mlpout_input_size = hidden_size // 4
+        self.mlpout = nn.Sequential(
+            nn.Linear(mlpout_input_size, in_channel),
+        )
+        self.init_weights(nn.init.kaiming_normal_)
+        
+    def init_weights(self, init_fn):
+        def init(m): 
+            for child in m.children():
+                if isinstance(child, nn.Conv1d):
+                    init_fn(child.weights)
+        init(self)
 
     def forward(self, x):
         """
@@ -248,10 +229,17 @@ class DilatedNet(nn.Module):
         :param x: Pytorch Variable
         :return:
         """
+        if self.add_feat:
+            x, feat = x
         out = self.cnn(x)
         out = self.flatten(out)
         out = self.mlp(out)
+        if self.add_feat:
+            feat_out = self.mlp2(feat)
+            out = torch.cat([out, feat_out], axis=1)
+        out = self.mlpout(out)
         return out
+
 
 class DilatedFeatNet(nn.Module):
     def __init__(self, in_channel=55, hidden_size=2000, dilation=2):
@@ -274,11 +262,19 @@ class DilatedFeatNet(nn.Module):
             nn.BatchNorm1d(hidden_size // 4),
             nn.ReLU(),
         )
-        self.mlpout = nn.Sequential(
-            nn.Linear(hidden_size//4 + 6, hidden_size // 8),
-            nn.BatchNorm1d(hidden_size // 8),
+        self.mlp2 = nn.Sequential(
+            nn.Linear(7, 64),  # 
+            nn.BatchNorm1d(64),
             nn.ReLU(),
-            nn.Linear(hidden_size // 8, in_channel),
+            nn.Linear(64, 16),
+            nn.BatchNorm1d(16),
+            nn.ReLU(),
+        )
+        self.mlpout = nn.Sequential(
+            # nn.Linear(hidden_size//4 + 7, hidden_size // 8),
+            # nn.BatchNorm1d(hidden_size // 8),
+            # nn.ReLU(),
+            nn.Linear(hidden_size // 4 + 16, in_channel),
         )
 
     def forward(self, item):
@@ -290,7 +286,8 @@ class DilatedFeatNet(nn.Module):
         out = self.cnn(x)
         out = self.flatten(out)
         out = self.mlp(out)
-        out = torch.concat([x, feat], axis=1)
+        feat_out = self.mlp2(feat)
+        out = torch.cat([out, feat_out], axis=1)
         out = self.mlpout(out)
         return out
 
@@ -345,18 +342,13 @@ class DilatedCNNLSTMNet(nn.Module):
 
     def forward(self, x):
         """
-
         :param x: Pytorch Variable
         :return:
         """
-        print(x.shape)
         lstm_out = self.lstm_block(x)
-        print(lstm_out.shape)
         lstm_out = self.flatten1(lstm_out)
-        print(lstm_out.shape)
         cnn_out = self.cnn(x)
         cnn_out = self.flatten2(cnn_out)
-        print(cnn_out.shape)
         out = torch.cat([lstm_out, cnn_out], axis=1)
         out = self.mlp(out)
         return out

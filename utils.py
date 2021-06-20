@@ -81,14 +81,12 @@ class ArielMLFeatDataset(Dataset):
     """Class for reading files for the Ariel ML data challenge 2021"""
     def __init__(self,
                  lc_path,
-                 params_path=None,
                  feat_path=None,
                  transform=None,
-                 start_ind=0,
-                 max_size=int(1e9),
-                 shuffle=True,
-                 seed=None,
-                 device=None):
+                 sample_ind=None,
+                 device=None,
+                 mode='train',
+                 ):
         """Create a pytorch dataset to read files for the Ariel ML Data challenge 2021
 
         Args:
@@ -112,34 +110,31 @@ class ArielMLFeatDataset(Dataset):
         self.lc_path = lc_path
         self.transform = transform
         self.device = device
+        self.sample_ind = sample_ind
+        self.mode = mode
 
-        self.files = sorted(
-            [p for p in os.listdir(self.lc_path) if p.endswith('txt')])
-        if shuffle:
-            np.random.seed(seed)
-            np.random.shuffle(self.files)
-        self.files = self.files[start_ind:start_ind + max_size]
+        self.avg_vals = np.load(avg_val_path)
 
-        if params_path is not None:
-            self.params_path = params_path
-        else:
-            self.params_path = None
-            self.params_files = None
+        indices = []
+        for i in sample_ind:
+            indices.extend(list(range(i, i+55)))
 
-        self.feats = torch.from_numpy(pd.read_csv(feat_path).values)
+        self.data = torch.load(lc_path)[indices]
+        if self.mode != 'eval':
+            self.target = self.data[:, -1]
+            self.data = self.data[:, :-1]
+        self.feats = torch.from_numpy(pd.read_csv(feat_path).values)[sample_ind]
 
     def __len__(self):
-        return len(self.files)
+        return len(self.sample_ind)
 
     def __getitem__(self, idx):
-        item_lc_path = Path(self.lc_path) / self.files[idx]
-        lc = torch.from_numpy(np.loadtxt(item_lc_path))
-        feat = self.feats[idx]
+        lc = self.data[55*idx:55*idx+55]
         if self.transform:
-            lc = self.transform(lc)
-        if self.params_path is not None:
-            item_params_path = Path(self.params_path) / self.files[idx]
-            target = torch.from_numpy(np.loadtxt(item_params_path))
+            lc = self.transform(lc) #self.avg_vals
+        feat = self.feats[idx].type(torch.float32)
+        if self.mode != 'eval':
+            target = self.target[55*idx:55*idx+55]
         else:
             target = torch.Tensor()
         return {
@@ -164,11 +159,10 @@ def simple_transform(x):
     out /= 0.04
     return out
 
-def subavg_transform(x):
+def subavg_transform(x, avg_vals):
     out = x.clone()
-    avg_vals = np.load('/data-nbd/ml_dataset/timeseries/pkdd_ml_data_challenge2/data/average_signal.npy')
-    out -= avg_vals
-    out /= np.std(out)
+    out -= avg_vals.astype(np.float32)
+    out /= 0.006
     return out
 
 class ChallengeMetric:

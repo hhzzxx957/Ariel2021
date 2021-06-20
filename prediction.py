@@ -9,7 +9,7 @@ from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
 
 from constants import *
-from utils import ArielMLDataset, ChallengeMetric, simple_transform
+from utils import ArielMLDataset, ChallengeMetric, simple_transform, ArielMLFeatDataset, subavg_transform
 
 
 def prediction(model_dir=None, save_name='MLP', device_id=0):
@@ -19,14 +19,24 @@ def prediction(model_dir=None, save_name='MLP', device_id=0):
     else:
         device = 'cpu'
 
-    dataset_test = ArielMLDataset(lc_train_path,
-                                  params_train_path,
-                                  start_ind=train_size + val_size,
-                                  max_size=test_size,
-                                  transform=simple_transform)
-    dataset_eval = ArielMLDataset(lc_test_path,
-                                  shuffle=False,
-                                  transform=simple_transform)
+    valid_ind = list(range(train_size+val_size, train_size + val_size+test_size))
+    # np.random.seed(random_seed)
+    # np.random.shuffle(indices_tot)
+    # valid_ind = indices_tot[int(len(indices_tot)*0.9):]
+    test_ind = list(range(53900))
+
+    dataset_test = ArielMLFeatDataset(lc_train_path,
+                                  feat_train_path,
+                                  sample_ind=valid_ind,
+                                  transform=simple_transform, #simple_transform,
+                                  device=device)
+    dataset_eval = ArielMLFeatDataset(lc_test_path,
+                                  feat_test_path,
+                                  sample_ind=test_ind,
+                                  transform=simple_transform, #simple_transform,
+                                  mode='eval',
+                                  device=device
+                                  )
     loader_test = DataLoader(dataset_test, batch_size=batch_size)
     loader_eval = DataLoader(dataset_eval, batch_size=1000, shuffle=False)
 
@@ -39,26 +49,23 @@ def prediction(model_dir=None, save_name='MLP', device_id=0):
     naive_1 = lambda x: torch.ones(x.shape[:-1]) * 0.06
 
     item = next(iter(loader_test))
-    item['lc'] = item['lc'].to(device)
     preds = {
         'naive1': naive_1(item['lc']),
         'normal_1000ppm': torch.normal(item['target'], 1e-3),
-        'model': model(item['lc'])
+        'model': model((item['lc'], item['feat']))
     }
 
     for name, pred in preds.items():
         print(
             name,
-            f"\t{challenge_metric.score(item['target'], pred.cpu()).item():.2f}"
+            f"\t{challenge_metric.score(item['target'].cpu(), pred.cpu()).item():.2f}"
         )
 
     # Evaluation
     preds = []
     print('Evaluate length', len(loader_eval))
     for k, item in tqdm(enumerate(loader_eval)):
-        gc.collect()
-        item['lc'] = item['lc'].to(device)
-        preds += [model(item['lc']).detach().cpu().numpy()]
+        preds += [model((item['lc'], item['feat'])).detach().cpu().numpy()]
 
     # eval_pred = torch.cat(preds)
     eval_pred = np.concatenate(preds, axis=0)
