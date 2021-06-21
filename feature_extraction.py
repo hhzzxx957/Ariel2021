@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from utils import ArielMLDataset
+from utils import ArielMLDataset, ArielMLFeatDataset
 from joblib import Parallel, delayed
 import torch
 import gc
@@ -135,14 +135,55 @@ sub_signal = signal[:,:300]-avg
 std_signal = np.std(sub_signal.numpy(), axis=1)
 np.mean(std_signal)
 # %%
-pred1 = np.loadtxt('outputs/DilatedCNN_kernel3_avgpool_lr05_cycle_deep_feat_large/evaluation_2021-06-19_backup.txt')
-pred2 = np.loadtxt('outputs/DilatedCNN_kernel3_avgpool_lr05_cycle_deep_feat_large/evaluation_2021-06-19.txt')
-pred3 = np.loadtxt('outputs/DilatedCNN_kernel3_avgpool_lr05_cycle_skip_large/evaluation_2021-06-18.txt')
-# %%
-pred4 = np.loadtxt('outputs/DilatedCNN_kernel3_avgpool_lr05_cycle_deep_feat_small_subavg/evaluation_2021-06-19.txt') 
-pred5 = np.loadtxt('outputs/DilatedCNN_kernel3_avgpool_lr05_cycle_deep_feat_large_subavg/evaluation_2021-06-19.txt') 
+# preprocess file
+from joblib import parallel_backend, Parallel, delayed, effective_n_jobs
+from sklearn.utils import gen_even_slices
+from sklearn.utils.validation import _num_samples
 
-# %%
-test_signal = torch.load('data/full_test_signal.pt')
-test_dataset = ArielMLDataset(lc_test_path, shuffle=False)
+
+def parallel_apply(df, func, n_jobs= -1, **kwargs):
+    """ Pandas apply in parallel using joblib. 
+    Uses sklearn.utils to partition input evenly.
+    
+    Args:
+        df: Pandas DataFrame, Series, or any other object that supports slicing and apply.
+        func: Callable to apply
+        n_jobs: Desired number of workers. Default value -1 means use all available cores.
+        **kwargs: Any additional parameters will be supplied to the apply function
+        
+    Returns:
+        Same as for normal Pandas DataFrame.apply()
+        
+    """
+    
+    if effective_n_jobs(n_jobs) == 1:
+        return df.apply(func, **kwargs)
+    else:
+        ret = Parallel(n_jobs=n_jobs)(
+            delayed(type(df).apply)(df[s], func, **kwargs)
+            for s in gen_even_slices(_num_samples(df), effective_n_jobs(n_jobs)))
+        return pd.concat(ret)
+
+def rolling_mean(x):
+    return pd.Series(x).rolling(3).mean().fillna(0).values
+
+avg_signal = np.load('/data-nbd/ml_dataset/timeseries/pkdd_ml_data_challenge2/data/average_signal.npy')
+
+mode = 'test'
+if mode == 'train':
+    full_train_signal_pt = torch.load('data/full_train_signal.pt')
+    df = full_train_signal_pt[:,:-1] - avg_signal.astype(np.float32)
+    df = pd.DataFrame(df.numpy())
+    df_new = parallel_apply(df, rolling_mean, n_jobs=12, axis=1, result_type='expand')
+    full_train_signal_pt_new = torch.tensor(df_new.values).type(torch.float32)
+    full_train_signal_pt_new = torch.cat((full_train_signal_pt_new, full_train_signal_pt[:,-1].unsqueeze(1)), axis=1)
+    torch.save(torch.tensor(full_train_signal_pt_new), 'data/full_train_signal_preprocessed.pt')
+elif mode == 'test':
+    full_test_signal_pt = torch.load('data/full_test_signal.pt')
+    df = full_test_signal_pt - avg_signal.astype(np.float32)
+    df = pd.DataFrame(df.numpy())
+    df_new = parallel_apply(df, rolling_mean, n_jobs=12, axis=1, result_type='expand')
+    full_test_signal_pt_new = torch.tensor(df_new.values).type(torch.float32)
+    torch.save(torch.tensor(full_test_signal_pt_new), 'data/full_test_signal_preprocessed.pt')
+
 # %%

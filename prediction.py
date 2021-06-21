@@ -19,21 +19,21 @@ def prediction(model_dir=None, save_name='MLP', device_id=0):
     else:
         device = 'cpu'
 
-    valid_ind = list(range(train_size+val_size, train_size + val_size+test_size))
-    # np.random.seed(random_seed)
-    # np.random.shuffle(indices_tot)
-    # valid_ind = indices_tot[int(len(indices_tot)*0.9):]
+    indices_tot = list(range(125600))
+    np.random.seed(random_seed)
+    np.random.shuffle(indices_tot)
+    valid_ind = indices_tot[train_size:train_size+test_size]
     test_ind = list(range(53900))
 
-    dataset_test = ArielMLFeatDataset(lc_train_path,
+    dataset_test = ArielMLFeatDataset(data_train_path,
                                   feat_train_path,
                                   sample_ind=valid_ind,
-                                  transform=simple_transform, #simple_transform,
+                                  transform=subavg_transform, #simple_transform,
                                   device=device)
-    dataset_eval = ArielMLFeatDataset(lc_test_path,
+    dataset_eval = ArielMLFeatDataset(data_test_path,
                                   feat_test_path,
                                   sample_ind=test_ind,
-                                  transform=simple_transform, #simple_transform,
+                                  transform=subavg_transform, #simple_transform,
                                   mode='eval',
                                   device=device
                                   )

@@ -1,5 +1,5 @@
 #!/bin/sh
-NAME=DilatedCNN_kernel3_avgpool_lr05_cycle_deep_feat_small_mem
+NAME=DilatedCNN_kernel3_deepskip_feat_large_subavg
 mkdir -p outputs/$NAME
 nohup python -u train.py \
 --save_name $NAME \

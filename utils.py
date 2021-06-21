@@ -117,7 +117,7 @@ class ArielMLFeatDataset(Dataset):
 
         indices = []
         for i in sample_ind:
-            indices.extend(list(range(i, i+55)))
+            indices.extend(list(range(i*55, i*55+55)))
 
         self.data = torch.load(lc_path)[indices]
         if self.mode != 'eval':
@@ -131,7 +131,7 @@ class ArielMLFeatDataset(Dataset):
     def __getitem__(self, idx):
         lc = self.data[55*idx:55*idx+55]
         if self.transform:
-            lc = self.transform(lc) #self.avg_vals
+            lc = self.transform(lc, self.avg_vals) #self.avg_vals
         feat = self.feats[idx].type(torch.float32)
         if self.mode != 'eval':
             target = self.target[55*idx:55*idx+55]
@@ -144,7 +144,7 @@ class ArielMLFeatDataset(Dataset):
         }
 
 
-def simple_transform(x):
+def simple_transform(x, avg_vals):
     """Perform a simple preprocessing of the input light curve array
     Args:
         x: np.array

@@ -12,7 +12,7 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from constants import *
-from models import MLP, Baseline, DilatedNet, DilatedCNNLSTMNet, DilatedFeatNet
+from models import MLP, Baseline, DilatedNet, DilatedCNNLSTMNet
 from utils import ArielMLDataset, ChallengeMetric, Scheduler, simple_transform, one_cycle, ArielMLFeatDataset, subavg_transform
 
 
@@ -28,22 +28,22 @@ def train(save_name, log_dir, device_id=0):
     indices_tot = list(range(125600))
     np.random.seed(random_seed)
     np.random.shuffle(indices_tot)
-    train_ind = indices_tot[:train_size]
-    valid_ind = indices_tot[train_size:train_size+val_size]
-    # train_ind = indices_tot[:int(len(indices_tot)*0.9)]
-    # valid_ind = indices_tot[int(len(indices_tot)*0.9):]
+    # train_ind = indices_tot[:train_size]
+    # valid_ind = indices_tot[train_size:train_size+val_size]
+    train_ind = indices_tot[:int(train_size*0.9)]
+    valid_ind = indices_tot[int(train_size*0.9):int(train_size)]
 
     # Training
-    dataset_train = ArielMLFeatDataset(lc_train_path,
+    dataset_train = ArielMLFeatDataset(data_train_path,
                                    feat_train_path,
                                    sample_ind=train_ind,
-                                   transform=simple_transform, #simple_transform,
+                                   transform=subavg_transform, #simple_transform,
                                    device=device)
     # Validation
-    dataset_val = ArielMLFeatDataset(lc_train_path,
+    dataset_val = ArielMLFeatDataset(data_train_path,
                                  feat_train_path,
                                  sample_ind=valid_ind,
-                                 transform=simple_transform, #simple_transform,
+                                 transform=subavg_transform, #simple_transform,
                                  device=device)
 
     # Loaders
@@ -57,8 +57,7 @@ def train(save_name, log_dir, device_id=0):
     # model = Baseline(H1=H1, H2=H2).double().to(device)
     # model = MLP().double().to(device)
     model = DilatedNet(add_feat=True).to(device)
-    # model = DilatedCNNLSTMNet().to(device)
-    # model = DilatedFeatNet().to(device)
+    # model = DilatedCNNLSTMNet(add_feat=True).to(device)
     print(model)
 
     # Define Loss, metric and optimizer
@@ -112,7 +111,7 @@ def train(save_name, log_dir, device_id=0):
             count = 0
         else:
             count += 1
-            if count >= 50:
+            if count >= early_stop:
                 print('early stop, best epoch: ', epoch - count)
                 break
 
@@ -132,4 +131,4 @@ if __name__ == '__main__':
     print(
         f'Parameters: {args.save_name}, train_size: {train_size}, batch_size: {batch_size}'
     )
-    print(f'Training time: {(time.time()-start_time)/60:.3f} mins')
+    print(f'Training time: {(time.time()-start_time)/60:.3f} mins \n')
