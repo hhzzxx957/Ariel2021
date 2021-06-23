@@ -82,6 +82,8 @@ class ArielMLFeatDataset(Dataset):
     def __init__(self,
                  lc_path,
                  feat_path=None,
+                 lgb_feat_path=None,
+                 file_feat_path=None,
                  transform=None,
                  sample_ind=None,
                  device=None,
@@ -124,6 +126,12 @@ class ArielMLFeatDataset(Dataset):
             self.target = self.data[:, -1]
             self.data = self.data[:, :-1]
         self.feats = torch.from_numpy(pd.read_csv(feat_path).values)[sample_ind]
+        if lgb_feat_path is not None:
+            feat_lgb = torch.from_numpy(np.loadtxt(lgb_feat_path))[sample_ind]
+            self.feats = torch.cat([self.feats, feat_lgb], axis=1)
+        if file_feat_path is not None:
+            feat_file = torch.load(file_feat_path)[sample_ind]
+            self.feats = torch.cat([self.feats, feat_file], axis=1)
 
     def __len__(self):
         return len(self.sample_ind)
@@ -161,8 +169,9 @@ def simple_transform(x, avg_vals):
 
 def subavg_transform(x, avg_vals):
     out = x.clone()
-    out -= avg_vals.astype(np.float32)
-    out /= 0.006
+    # out = torch.clip(out, min=-0.1, max=0.1)
+    # out -= avg_vals.astype(np.float32)
+    out /= 0.006 #0.006
     return out
 
 class ChallengeMetric:

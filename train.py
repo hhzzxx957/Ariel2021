@@ -6,7 +6,7 @@ from functools import partial
 import numpy as np
 import torch
 from torch.nn import L1Loss, MSELoss
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -36,12 +36,14 @@ def train(save_name, log_dir, device_id=0):
     # Training
     dataset_train = ArielMLFeatDataset(data_train_path,
                                    feat_train_path,
+                                   lgb_train_path,
                                    sample_ind=train_ind,
                                    transform=subavg_transform, #simple_transform,
                                    device=device)
     # Validation
     dataset_val = ArielMLFeatDataset(data_train_path,
                                  feat_train_path,
+                                 lgb_train_path,
                                  sample_ind=valid_ind,
                                  transform=subavg_transform, #simple_transform,
                                  device=device)
@@ -61,9 +63,9 @@ def train(save_name, log_dir, device_id=0):
     print(model)
 
     # Define Loss, metric and optimizer
-    loss_function = L1Loss()  #MSELoss() #L1Loss, ChallengeMetric()
+    loss_function = ChallengeMetric()  #MSELoss() #L1Loss, ChallengeMetric()
     challenge_metric = ChallengeMetric()
-    opt = Adam(model.parameters(), lr=lr)
+    opt = AdamW(model.parameters(), lr=lr)
     # scheduler = StepLR(opt, step_size=50, gamma=0.25)
     scheduler = Scheduler(opt, partial(one_cycle, t_max=epochs, pivot=0.3))
 

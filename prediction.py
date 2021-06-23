@@ -27,11 +27,13 @@ def prediction(model_dir=None, save_name='MLP', device_id=0):
 
     dataset_test = ArielMLFeatDataset(data_train_path,
                                   feat_train_path,
+                                  lgb_train_path,
                                   sample_ind=valid_ind,
                                   transform=subavg_transform, #simple_transform,
                                   device=device)
     dataset_eval = ArielMLFeatDataset(data_test_path,
                                   feat_test_path,
+                                  lgb_test_path,
                                   sample_ind=test_ind,
                                   transform=subavg_transform, #simple_transform,
                                   mode='eval',

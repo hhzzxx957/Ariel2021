@@ -200,15 +200,12 @@ class DilatedNet(nn.Module):
         # Input
         self.cnn = nn.Sequential(
             UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
-            SkipConv1d(64, kernel=3, pad=2, dilation=dilation),
             UConv1d(64, 64, kernel=3, pad=2, dilation=dilation),
             
             UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
-            SkipConv1d(128, kernel=3, pad=2, dilation=dilation),
             UConv1d(128, 128, kernel=3, pad=2, dilation=dilation),
             
             UConv1d(128, 256, kernel=3, pad=2, dilation=dilation),
-            SkipConv1d(256, kernel=3, pad=2, dilation=dilation),
             UConv1d(256, 256, kernel=3, pad=2, dilation=dilation),
             )
         self.flatten = Flatten()
@@ -229,7 +226,11 @@ class DilatedNet(nn.Module):
             nn.BatchNorm1d(hidden_size // 4),
             nn.ReLU(),
         )
-        self.mlp2 = nn.Sequential(
+
+        self.embed1 = nn.Embedding(10, 16)
+        self.embed2 = nn.Embedding(10, 16)
+
+        self.mlp_feat = nn.Sequential(
             nn.Linear(6, 64),  # 
             nn.BatchNorm1d(64),
             nn.ReLU(),
@@ -240,7 +241,7 @@ class DilatedNet(nn.Module):
 
         mlpout_input_size = hidden_size // 4
         if add_feat:
-            mlpout_input_size += 16
+            mlpout_input_size += 16 #+55
         if add_lstm:
             mlpout_input_size += 256*2
         if add_attn:
@@ -267,14 +268,19 @@ class DilatedNet(nn.Module):
         :param x: Pytorch Variable
         :return:
         """
+        feat_lgb = None
         if self.add_feat:
             x, feat = x
+            # feat_file = feat[:, 6+55:6+55+3]
+            feat_lgb = feat[:, 6:6+55]
+            feat = feat[:,:6]
         out = self.cnn(x)
         out = self.flatten(out)
         out = self.mlp(out)
+
         if self.add_feat:
-            feat_out = self.mlp2(feat)
-            out = torch.cat([out, feat_out], axis=1)
+            feat_out = self.mlp_feat(feat)
+            out = torch.cat([out, feat_out], axis=1) #feat_lgb
         if self.add_lstm:
             lstm_out = self.lstm_block(x)
             lstm_out = self.flatten2(lstm_out)
@@ -283,6 +289,7 @@ class DilatedNet(nn.Module):
             attn_out = self.attn_block(x)
             attn_out = self.flatten3(attn_out)
             out = torch.cat([out, attn_out], axis=1)
+
         out = self.mlpout(out)
         return out
 
