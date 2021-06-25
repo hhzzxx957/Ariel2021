@@ -227,8 +227,8 @@ class DilatedNet(nn.Module):
             nn.ReLU(),
         )
 
-        self.embed1 = nn.Embedding(10, 16)
-        self.embed2 = nn.Embedding(10, 16)
+        self.embed1 = nn.Embedding(11, 16)
+        self.embed2 = nn.Embedding(11, 16)
 
         self.mlp_feat = nn.Sequential(
             nn.Linear(6, 64),  # 
@@ -271,8 +271,8 @@ class DilatedNet(nn.Module):
         feat_lgb = None
         if self.add_feat:
             x, feat = x
-            # feat_file = feat[:, 6+55:6+55+3]
-            feat_lgb = feat[:, 6:6+55]
+            # feat_file = feat[:, 6+55+1:6+55+3].long()
+            # feat_lgb = feat[:, 6:6+55]
             feat = feat[:,:6]
         out = self.cnn(x)
         out = self.flatten(out)
@@ -280,6 +280,8 @@ class DilatedNet(nn.Module):
 
         if self.add_feat:
             feat_out = self.mlp_feat(feat)
+            # emb1 = self.embed1(feat_file[:, 0].reshape(1, -1)).squeeze()
+            # emb2 = self.embed1(feat_file[:, 1].reshape(1, -1)).squeeze()
             out = torch.cat([out, feat_out], axis=1) #feat_lgb
         if self.add_lstm:
             lstm_out = self.lstm_block(x)

@@ -5,6 +5,13 @@ from sklearn.model_selection import train_test_split
 import gc
 import numpy as np
 import torch
+from sklearn.model_selection import KFold
+
+def scoring(pred, y, loss=False):
+    if loss:
+        return (y * np.abs(pred - y)).sum() / len(y) * 1e6
+    else:
+        return 1e4 - 2 * (y * np.abs(pred - y)).sum() / len(y) * 1e6
 
 #%%
 # # sample data
@@ -23,68 +30,74 @@ import torch
 # train_df.to_pickle('../data/sample_train_df.pickle')
 
 # %%
-train_df = pd.read_pickle('../data/sample_train_df.pickle')
-# colnames = list(train_df.columns)
-# colnames[-1] = 'label'
-# train_df.columns = colnames
+def train_lgb():
+    train_df = pd.read_pickle('../data/full_train_df.pickle')
+    # colnames = list(train_df.columns)
+    # colnames[-1] = 'label'
+    # train_df.columns = colnames
 
-y = train_df.pop('300') # label
-X = train_df
-del train_df
-X = X.reset_index(drop=True)
-y = y.reset_index(drop=True)
-gc.collect()
+    y = train_df.pop('label') # label
+    X = train_df
+    del train_df
+    X = X.reset_index(drop=True)
+    y = y.reset_index(drop=True)
+    X_test = pd.read_pickle('../data/full_test_df.pickle')
+    gc.collect()
 
-train_size = 4096*4
-indices_tot = list(range(train_size))
-np.random.shuffle(indices_tot)
-train_ind = indices_tot[:int(train_size*0.9)]
-val_ind = indices_tot[int(train_size*0.9):]
-train_indices = []
-for i in train_ind:
-    train_indices.extend(list(range(i*55, i*55+55)))
-val_indices = []
-for i in val_ind:
-    val_indices.extend(list(range(i*55, i*55+55)))
+    train_size = 125600 #4096*4
+    indices_tot = list(range(train_size))
+    # np.random.shuffle(indices_tot)
+    # train_ind = indices_tot[:int(train_size*0.9)]
+    # valid_ind = indices_tot[int(train_size*0.9):]
+    final_pred = np.zeros(len(y))
+    final_test_pred = np.zeros(len(X_test))
+    kf = KFold(n_splits=5, shuffle=True, random_state=2021)
+    for i, (train_ind, valid_ind) in enumerate(kf.split(indices_tot)):
+        train_indices = []
+        for i in train_ind:
+            train_indices.extend(list(range(i*55, i*55+55)))
+        val_indices = []
+        for i in valid_ind:
+            val_indices.extend(list(range(i*55, i*55+55)))
 
 
-X_train, X_valid = X.iloc[train_indices, :], X.iloc[val_indices, :]
-y_train, y_valid = y[train_indices], y[val_indices]
-# train_test_split(X, y, test_size=0.2, random_state=2021)
+        X_train, X_valid = X.iloc[train_indices, :], X.iloc[val_indices, :]
+        y_train, y_valid = y[train_indices], y[val_indices]
+    # train_test_split(X, y, test_size=0.2, random_state=2021)
 
-
-#%%
-params = {
-        'objective': 'regression',
-        'metric': 'mae',
-        'verbosity': -1,
-        'seed': 2021,
-        'num_threads': 20
-    }
-hyperparams = {
-        'two_round': False,
-        'learning_rate': 0.1,
-        'num_leaves': 31,
-        'max_depth': 9,
-        'bagging_fraction': 0.9,
-        'bagging_freq': 5,
-        'feature_fraction': 0.9,
-    }
-lgb = LGB(params=params, hyperparams=hyperparams, verbose=1)
-valid_pred = lgb.valid_fit(X_train, X_valid, y_train, y_valid,)
-
+        params = {
+                'objective': 'regression',
+                'metric': 'mae',
+                'verbosity': -1,
+                'seed': 2021,
+                'num_threads': 20
+            }
+        hyperparams = {
+                'two_round': False,
+                'learning_rate': 0.5,
+                'num_leaves': 31,
+                'max_depth': 8,
+                'bagging_fraction': 0.9,
+                'bagging_freq': 5,
+                'feature_fraction': 0.9,
+            }
+        lgb = LGB(params=params, hyperparams=hyperparams, verbose=1)
+        valid_pred = lgb.valid_fit(X_train, X_valid, y_train, y_valid,)
+        test_pred = lgb.predict(X_test)
+        print(scoring(valid_pred, y_valid))
+        print(scoring(valid_pred, y_valid, loss=True))
+        
+        final_pred[val_indices] = valid_pred
+        final_test_pred += test_pred
+    final_test_pred /= 5
+    np.savetxt('lgb_oof_train_preds.txt', final_pred.reshape((-1, 55)))
+    np.savetxt('lgb_oof_test_preds.txt', final_test_pred.reshape((-1, 55)))
 # %%
 # lgb.model.save_model('model.txt', num_iteration=lgb.model.best_iteration)
+# test_pred = lgb.predict(X_test)
+# lgb.feat_imp()
 
-
-#%%
-X_test = pd.read_pickle('../data/full_test_df.pickle')
-
-test_pred = lgb.predict(X_test)
-train_pred = lgb.predict(X)
 
 # %%
-#(53900, 55)
-np.savetxt('lgb_test_preds.txt', test_pred.reshape((-1, 55)))
-np.savetxt('lgb_train_preds.txt', train_pred.reshape((-1, 55)))
-# %%
+if __name__ == "__main__":
+    train_lgb()

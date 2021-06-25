@@ -77,6 +77,50 @@ def prediction(model_dir=None, save_name='MLP', device_id=0):
     if save_path and (53900, 55) == eval_pred.shape:
         np.savetxt(save_path, eval_pred, fmt='%.10f', delimiter='\t')
 
+def gmean(input_x, dim):
+    log_x = torch.log1p(input_x)
+    return torch.expm1(torch.mean(log_x, dim=dim))
+
+def cross_prediction(save_name='MLP', device_id=0, model_num=10):
+    torch.cuda.set_device(device_id)
+    if torch.cuda.is_available():
+        device = 'cuda'
+    else:
+        device = 'cpu'
+    
+    test_ind = list(range(53900))
+    dataset_eval = ArielMLFeatDataset(data_test_path,
+                                  feat_test_path,
+                                  lgb_test_path,
+                                  sample_ind=test_ind,
+                                  transform=subavg_transform, #simple_transform,
+                                  mode='eval',
+                                  device=device
+                                  )
+    loader_eval = DataLoader(dataset_eval, batch_size=1000, shuffle=False)
+
+    final_pred = []
+    for i in range(model_num):     
+        model_dir = f'outputs/{save_name}/model_state_{i}.pt'
+        model = torch.load(model_dir, map_location=device)
+    
+        preds = []
+        print('Evaluate length', len(loader_eval))
+        for k, item in tqdm(enumerate(loader_eval)):
+            preds += [model((item['lc'], item['feat'])).detach().cpu().numpy()]
+
+        # eval_pred = torch.cat(preds)
+        eval_pred = np.concatenate(preds, axis=0)
+        final_pred.append(eval_pred)
+
+    final_pred = torch.tensor(final_pred)
+    final_pred_mean = torch.mean(final_pred, dim=0)
+    # final_pred_gmean = gmean(final_pred, dim=0)
+    print(final_pred_mean.shape)
+    save_path = f'outputs/{save_name}/ensemble_evaluation_{datetime.datetime.today().date()}.txt'
+    if save_path and (53900, 55) == final_pred_mean.shape:
+        np.savetxt(save_path, final_pred_mean, fmt='%.10f', delimiter='\t')
+
 
 if __name__ == "__main__":
     start_time = time.time()

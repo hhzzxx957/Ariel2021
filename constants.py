@@ -10,14 +10,14 @@ params_train_path = project_dir / "data/params_train/home/ucapats/Scratch/ml_dat
 lc_test_path = project_dir / "data/noisy_test/home/ucapats/Scratch/ml_data_challenge/test_set/noisy_test"
 lc_train_path = project_dir / "data/noisy_train/home/ucapats/Scratch/ml_data_challenge/training_set/noisy_train"
 
-data_test_path = project_dir / "data/full_test_signal_fftsmooth.pt"
-data_train_path = project_dir / "data/full_train_signal_fftsmooth.pt" #full_train_signal_preprocessed.pt"
-feat_train_path = project_dir / "data/properties_df.csv"
+data_test_path = project_dir / "data/full_test_signal_subavg.pt"
+data_train_path = project_dir / "data/full_train_signal_subavg.pt" #full_train_signal_preprocessed.pt"
+feat_train_path = project_dir / "data/train_properties_df.csv"
 feat_test_path = project_dir / "data/test_properties_df.csv"
-lgb_train_path = project_dir / "ml_method/lgb_train_preds.txt"
-lgb_test_path = project_dir / "ml_method/lgb_test_preds.txt"
-file_train_path = project_dir / 'data/file_feat_train.pt'
-file_test_path = project_dir / 'data/file_feat_test.pt'
+lgb_train_path = project_dir / "ml_method/lgb_oof_train_preds.txt"
+lgb_test_path = project_dir / "ml_method/lgb_oof_test_preds.txt"
+filefeat_train_path = project_dir / 'data/file_feat_train.pt'
+filefeat_test_path = project_dir / 'data/file_feat_test.pt'
 
 avg_val_path = project_dir / "data/average_signal_new.npy"
 

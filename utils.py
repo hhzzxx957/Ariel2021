@@ -84,6 +84,7 @@ class ArielMLFeatDataset(Dataset):
                  feat_path=None,
                  lgb_feat_path=None,
                  file_feat_path=None,
+                 quantile_feat_path=None,
                  transform=None,
                  sample_ind=None,
                  device=None,
@@ -120,6 +121,9 @@ class ArielMLFeatDataset(Dataset):
         indices = []
         for i in sample_ind:
             indices.extend(list(range(i*55, i*55+55)))
+        quantile_indices = []
+        for i in sample_ind:
+            quantile_indices.extend(list(range(i//100*55, i//100*55+55)))
 
         self.data = torch.load(lc_path)[indices]
         if self.mode != 'eval':
@@ -132,6 +136,9 @@ class ArielMLFeatDataset(Dataset):
         if file_feat_path is not None:
             feat_file = torch.load(file_feat_path)[sample_ind]
             self.feats = torch.cat([self.feats, feat_file], axis=1)
+        if quantile_feat_path is not None:
+            quantile_feat = torch.from_numpy(np.load(quantile_feat_path))[quantile_indices]
+            self.feats = torch.cat([self.feats, quantile_feat], axis=1)
 
     def __len__(self):
         return len(self.sample_ind)
