@@ -108,7 +108,7 @@ class LGB:
                 'feature_name': new_feat_name,
                 'valid_names': ['train', 'eval'],
                 'num_boost_round': self.num_boost_round,
-                'early_stopping_rounds': 30,
+                'early_stopping_rounds': 80,
                 'verbose_eval': 50
             }
         return train_params

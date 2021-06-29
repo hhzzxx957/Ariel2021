@@ -108,10 +108,61 @@ def get_quantile_feat(save_name, mode='train'):
 # get_quantile_feat('../data/quantile_feat_train.npy', mode='train')
 get_quantile_feat('../data/quantile_feat_test.npy', mode='eval')
 # %%
-quantile_train_df = pd.DataFrame(np.load('../data/quantile_feat_test.npy'))
-full_train_df = pd.read_pickle('../data/full_train_df.pickle')
+def merge_quantile_feat(save_name, mode='train'):
+    if mode == 'train':
+        quantile_df = pd.DataFrame(np.load('../data/quantile_feat_train.npy'))
+        full_df = pd.read_pickle('../data/full_train_df.pickle')
+    else:
+        quantile_df = pd.DataFrame(np.load('../data/quantile_feat_test.npy'))
+        full_df = pd.read_pickle('../data/full_test_df.pickle')
 
-tot_len = len(quantile_train_df)//55
-plant_ids_1 = np.repeat(list(range(tot_len)), 55*100)
-plant_ids_2 = np.repeat(list(range(tot_len)), 55)
-spec_id = list(range(55))*tot_len
+    tot_len = len(quantile_df)//55
+    plant_ids_1 = np.repeat(list(range(tot_len)), 55*100)
+    plant_ids_2 = np.repeat(list(range(tot_len)), 55)
+    spec_id = list(range(55))*tot_len
+
+    quantile_df['planet_id'] = plant_ids_2
+    quantile_df['position'] = spec_id
+    full_df['planet_id'] = plant_ids_1
+
+    full_df = pd.merge(full_df, quantile_df, on=['planet_id', 'position'])
+
+    full_df.to_pickle(save_name)
+
+# merge_quantile_feat(save_name='../data/fullfeat_train_df.pickle', mode='train')
+merge_quantile_feat(save_name='../data/fullfeat_test_df.pickle', mode='test')
+# %%
+def aggregate_df_gaussavg(save_name, mode='train'):
+    if mode == 'train':
+        tot_len = 125600
+        full_signal = torch.load('../data/full_train_signal.pt')
+    else:
+        tot_len = 53900
+        full_signal = torch.load('../data/full_test_signal.pt')    
+
+    avg = np.load('../data/average_signal_new.npy')
+
+    if mode == 'train':
+        full_df = pd.DataFrame(full_signal[:,:-1].numpy())
+    else:
+        full_df = pd.DataFrame(full_signal.numpy())
+
+    spec_id = list(range(55))*tot_len
+    planet_id = []
+    for i in range(tot_len//100):
+        planet_id.extend([i]*100*55)
+    
+    full_df['spec_id'] = spec_id
+    full_df['planet_id'] = planet_id
+    
+    full_denoise_df = full_df.groupby(['planet_id', 'spec_id']).median()
+    full_denoise_df -= avg
+    
+    full_denoise_df.to_pickle(save_name)
+
+# aggregate_df(save_name='../data/full_train_denoise_df.pickle', mode='train')
+aggregate_df(save_name='../data/full_test_denoise_df.pickle', mode='eval')
+
+
+#%%
+file_feat = get_file_feats(lc_train_path, 'data/file_feat_train.pt')

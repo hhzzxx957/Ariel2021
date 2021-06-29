@@ -30,8 +30,8 @@ def scoring(pred, y, loss=False):
 # train_df.to_pickle('../data/sample_train_df.pickle')
 
 # %%
-def train_lgb():
-    train_df = pd.read_pickle('../data/full_train_df.pickle')
+def train_lgb(train_df, X_test):
+    # train_df = pd.read_pickle('../data/full_train_df.pickle')
     # colnames = list(train_df.columns)
     # colnames[-1] = 'label'
     # train_df.columns = colnames
@@ -41,10 +41,11 @@ def train_lgb():
     del train_df
     X = X.reset_index(drop=True)
     y = y.reset_index(drop=True)
-    X_test = pd.read_pickle('../data/full_test_df.pickle')
+    # X_test = pd.read_pickle('../data/full_test_df.pickle')
     gc.collect()
 
-    train_size = 125600 #4096*4
+    train_size = 1256 #4096*4
+    step = 5500
     indices_tot = list(range(train_size))
     # np.random.shuffle(indices_tot)
     # train_ind = indices_tot[:int(train_size*0.9)]
@@ -55,10 +56,10 @@ def train_lgb():
     for i, (train_ind, valid_ind) in enumerate(kf.split(indices_tot)):
         train_indices = []
         for i in train_ind:
-            train_indices.extend(list(range(i*55, i*55+55)))
+            train_indices.extend(list(range(i*step, (i+1)*step)))
         val_indices = []
         for i in valid_ind:
-            val_indices.extend(list(range(i*55, i*55+55)))
+            val_indices.extend(list(range(i*step, (i+1)*step)))
 
 
         X_train, X_valid = X.iloc[train_indices, :], X.iloc[val_indices, :]
@@ -74,7 +75,7 @@ def train_lgb():
             }
         hyperparams = {
                 'two_round': False,
-                'learning_rate': 0.5,
+                'learning_rate': 0.1,
                 'num_leaves': 31,
                 'max_depth': 8,
                 'bagging_fraction': 0.9,
@@ -90,6 +91,7 @@ def train_lgb():
         final_pred[val_indices] = valid_pred
         final_test_pred += test_pred
     final_test_pred /= 5
+    print(lgb.feat_imp()[:20])
     np.savetxt('lgb_oof_train_preds.txt', final_pred.reshape((-1, 55)))
     np.savetxt('lgb_oof_test_preds.txt', final_test_pred.reshape((-1, 55)))
 # %%
@@ -100,4 +102,7 @@ def train_lgb():
 
 # %%
 if __name__ == "__main__":
-    train_lgb()
+    train_df = pd.read_pickle('../data/fullfeat_train_df.pickle')
+    X_test = pd.read_pickle('../data/fullfeat_test_df.pickle')
+    train_lgb(train_df, X_test)
+# %%

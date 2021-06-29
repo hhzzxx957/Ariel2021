@@ -9,7 +9,8 @@ from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
 
 from constants import *
-from utils import ArielMLDataset, ChallengeMetric, simple_transform, ArielMLFeatDataset, subavg_transform
+from utils import (ArielMLDataset, ArielMLFeatDataset, ChallengeMetric, generate_indice,
+                   simple_transform, subavg_transform)
 
 
 def prediction(model_dir=None, save_name='MLP', device_id=0):
@@ -19,21 +20,29 @@ def prediction(model_dir=None, save_name='MLP', device_id=0):
     else:
         device = 'cpu'
 
-    indices_tot = list(range(125600))
+    indices_tot = list(range(1256))
     np.random.seed(random_seed)
     np.random.shuffle(indices_tot)
     valid_ind = indices_tot[train_size:train_size+test_size]
+    valid_ind = generate_indice(valid_ind)
     test_ind = list(range(53900))
+    # test_ind = generate_indice(test_ind)
 
     dataset_test = ArielMLFeatDataset(data_train_path,
                                   feat_train_path,
                                   lgb_train_path,
+                                  filefeat_train_path,
+                                  quantilefeat_train_path,
+                                  fftdata_train_path,
                                   sample_ind=valid_ind,
                                   transform=subavg_transform, #simple_transform,
                                   device=device)
     dataset_eval = ArielMLFeatDataset(data_test_path,
                                   feat_test_path,
                                   lgb_test_path,
+                                  filefeat_test_path,
+                                  quantilefeat_test_path,
+                                  fftdata_test_path,
                                   sample_ind=test_ind,
                                   transform=subavg_transform, #simple_transform,
                                   mode='eval',
@@ -54,7 +63,7 @@ def prediction(model_dir=None, save_name='MLP', device_id=0):
     preds = {
         'naive1': naive_1(item['lc']),
         'normal_1000ppm': torch.normal(item['target'], 1e-3),
-        'model': model((item['lc'], item['feat']))
+        'model': model(item['lc'], item['fft'], item['feat'])
     }
 
     for name, pred in preds.items():
@@ -67,7 +76,7 @@ def prediction(model_dir=None, save_name='MLP', device_id=0):
     preds = []
     print('Evaluate length', len(loader_eval))
     for k, item in tqdm(enumerate(loader_eval)):
-        preds += [model((item['lc'], item['feat'])).detach().cpu().numpy()]
+        preds += [model(item['lc'], item['fft'], item['feat']).detach().cpu().numpy()]
 
     # eval_pred = torch.cat(preds)
     eval_pred = np.concatenate(preds, axis=0)
@@ -92,6 +101,8 @@ def cross_prediction(save_name='MLP', device_id=0, model_num=10):
     dataset_eval = ArielMLFeatDataset(data_test_path,
                                   feat_test_path,
                                   lgb_test_path,
+                                  filefeat_test_path,
+                                  quantilefeat_test_path,
                                   sample_ind=test_ind,
                                   transform=subavg_transform, #simple_transform,
                                   mode='eval',
@@ -107,7 +118,7 @@ def cross_prediction(save_name='MLP', device_id=0, model_num=10):
         preds = []
         print('Evaluate length', len(loader_eval))
         for k, item in tqdm(enumerate(loader_eval)):
-            preds += [model((item['lc'], item['feat'])).detach().cpu().numpy()]
+            preds += [model(item['lc'], item['feat']).detach().cpu().numpy()]
 
         # eval_pred = torch.cat(preds)
         eval_pred = np.concatenate(preds, axis=0)

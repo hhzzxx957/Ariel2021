@@ -85,6 +85,7 @@ class ArielMLFeatDataset(Dataset):
                  lgb_feat_path=None,
                  file_feat_path=None,
                  quantile_feat_path=None,
+                #  quantilephoton_feat_path=None,
                  transform=None,
                  sample_ind=None,
                  device=None,
@@ -124,27 +125,42 @@ class ArielMLFeatDataset(Dataset):
         quantile_indices = []
         for i in sample_ind:
             quantile_indices.extend(list(range(i//100*55, i//100*55+55)))
+        quantilephoton_indices = []
+        for i in sample_ind:
+            quantilephoton_indices.extend(list(range(i//10*55, i//10*55+55)))
 
         self.data = torch.load(lc_path)[indices]
+
         if self.mode != 'eval':
             self.target = self.data[:, -1]
             self.data = self.data[:, :-1]
         self.feats = torch.from_numpy(pd.read_csv(feat_path).values)[sample_ind]
-        if lgb_feat_path is not None:
-            feat_lgb = torch.from_numpy(np.loadtxt(lgb_feat_path))[sample_ind]
-            self.feats = torch.cat([self.feats, feat_lgb], axis=1)
         if file_feat_path is not None:
             feat_file = torch.load(file_feat_path)[sample_ind]
             self.feats = torch.cat([self.feats, feat_file], axis=1)
+
         if quantile_feat_path is not None:
             quantile_feat = torch.from_numpy(np.load(quantile_feat_path))[quantile_indices]
+            quantile_feat = quantile_feat.reshape(-1, 55*3)
+            # print(quantile_feat.shape)
             self.feats = torch.cat([self.feats, quantile_feat], axis=1)
+
+        # if quantilephoton_feat_path is not None:
+        #     quantilephoton_feat = torch.from_numpy(np.load(quantilephoton_feat_path))[quantilephoton_indices]
+        #     quantilephoton_feat = quantilephoton_feat.reshape(-1, 55*3)
+        #     # print(quantilephoton_feat.shape)
+        #     self.feats = torch.cat([self.feats, quantilephoton_feat], axis=1)
+
+        if lgb_feat_path is not None:
+            feat_lgb = torch.from_numpy(np.loadtxt(lgb_feat_path))[sample_ind]
+            self.feats = torch.cat([self.feats, feat_lgb], axis=1)
 
     def __len__(self):
         return len(self.sample_ind)
 
     def __getitem__(self, idx):
         lc = self.data[55*idx:55*idx+55]
+
         if self.transform:
             lc = self.transform(lc, self.avg_vals) #self.avg_vals
         feat = self.feats[idx].type(torch.float32)
@@ -178,8 +194,14 @@ def subavg_transform(x, avg_vals):
     out = x.clone()
     # out = torch.clip(out, min=-0.1, max=0.1)
     # out -= avg_vals.astype(np.float32)
-    out /= 0.006 #0.006
+    out /= 0.02 #0.006
     return out
+
+def generate_indice(indices, step=100):
+    output_indices = []
+    for i in indices:
+        output_indices.extend(list(range(i*step, (i+1)*step)))
+    return output_indices
 
 class ChallengeMetric:
     """Class for challenge metric"""

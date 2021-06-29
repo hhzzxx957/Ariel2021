@@ -188,15 +188,13 @@ class AttentionConv(nn.Module):
 
 
 class DilatedNet(nn.Module):
-    def __init__(self, in_channel=55, hidden_size=2048, dilation=2, add_feat=False, add_lstm=False, add_attn=False):
+    def __init__(self, in_channel=55, hidden_size=2048, dilation=2, add_feat=False, add_fft=False):
         """
         """
         super(DilatedNet, self).__init__()
         self.dilation = dilation
         self.hidden_size = hidden_size
         self.add_feat = add_feat
-        self.add_lstm = add_lstm
-        self.add_attn = add_attn
         # Input
         self.cnn = nn.Sequential(
             UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
@@ -210,14 +208,6 @@ class DilatedNet(nn.Module):
             )
         self.flatten = Flatten()
 
-        if add_lstm:
-            self.lstm_block = BlockLSTM(300, 2)
-            self.flatten2 = Flatten()
-
-        if add_attn:
-            self.attn_block = AttentionConv(in_channel, 16, 3)
-            self.flatten3 = Flatten()
-
         self.mlp = nn.Sequential(
             nn.Linear(256 * (n_timesteps // 2**6), hidden_size),  # 
             nn.BatchNorm1d(hidden_size),
@@ -227,8 +217,8 @@ class DilatedNet(nn.Module):
             nn.ReLU(),
         )
 
-        self.embed1 = nn.Embedding(11, 16)
-        self.embed2 = nn.Embedding(11, 16)
+        # self.embed1 = nn.Embedding(11, 16)
+        # self.embed2 = nn.Embedding(11, 16)
 
         self.mlp_feat = nn.Sequential(
             nn.Linear(6, 64),  # 
@@ -241,17 +231,20 @@ class DilatedNet(nn.Module):
 
         mlpout_input_size = hidden_size // 4
         if add_feat:
-            mlpout_input_size += 16 #+55
-        if add_lstm:
-            mlpout_input_size += 256*2
-        if add_attn:
-            mlpout_input_size += 16*300
+            mlpout_input_size += 16 +55*3 #+55
 
         self.mlpout = nn.Sequential(
             nn.Linear(mlpout_input_size, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Linear(256, in_channel),
+        )
+
+        self.mlplgb = nn.Sequential(
+            nn.Linear(in_channel, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Linear(128, in_channel),
         )
         self.init_weights(nn.init.kaiming_normal_)
         
@@ -262,7 +255,7 @@ class DilatedNet(nn.Module):
                     init_fn(child.weights)
         init(self)
 
-    def forward(self, x):
+    def forward(self, x, feat=None):
         """
 
         :param x: Pytorch Variable
@@ -270,9 +263,10 @@ class DilatedNet(nn.Module):
         """
         feat_lgb = None
         if self.add_feat:
-            x, feat = x
-            # feat_file = feat[:, 6+55+1:6+55+3].long()
-            # feat_lgb = feat[:, 6:6+55]
+            # x, feat = x
+            feat_file = feat[:, 6+1:6+3].long()
+            feat_quantile = feat[:, 6+3:6+3+55*3]
+            feat_lgb = feat[:, 6+3+55*3:6+3+55*3+55]
             feat = feat[:,:6]
         out = self.cnn(x)
         out = self.flatten(out)
@@ -282,18 +276,17 @@ class DilatedNet(nn.Module):
             feat_out = self.mlp_feat(feat)
             # emb1 = self.embed1(feat_file[:, 0].reshape(1, -1)).squeeze()
             # emb2 = self.embed1(feat_file[:, 1].reshape(1, -1)).squeeze()
-            out = torch.cat([out, feat_out], axis=1) #feat_lgb
-        if self.add_lstm:
-            lstm_out = self.lstm_block(x)
-            lstm_out = self.flatten2(lstm_out)
-            out = torch.cat([out, lstm_out], axis=1)
-        if self.add_attn:
-            attn_out = self.attn_block(x)
-            attn_out = self.flatten3(attn_out)
-            out = torch.cat([out, attn_out], axis=1)
+            out = torch.cat([out, feat_out, feat_quantile], axis=1) #feat_lgb
 
         out = self.mlpout(out)
+
+        if feat_lgb is not None:
+            out += feat_lgb
+            out = self.mlplgb(out)
         return out
+
+
+
 
 class BlockLSTM(nn.Module):
     def __init__(self,

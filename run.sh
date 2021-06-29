@@ -1,5 +1,5 @@
 #!/bin/sh
-NAME=DilatedCNN_kernel3_deep_feat_large_subavg_metricadamw
+NAME=featquan_proprocessed_variancefeatnorm_adamw
 mkdir -p outputs/$NAME
 nohup python -u train.py \
 --save_name $NAME \
