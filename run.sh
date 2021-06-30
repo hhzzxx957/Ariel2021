@@ -1,5 +1,5 @@
 #!/bin/sh
-NAME=featquan_proprocessed_variancefeatnorm_adamw
+NAME=featquanphoton_proprocessed_adamw_cross
 mkdir -p outputs/$NAME
 nohup python -u train.py \
 --save_name $NAME \

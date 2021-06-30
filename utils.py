@@ -83,9 +83,9 @@ class ArielMLFeatDataset(Dataset):
                  lc_path,
                  feat_path=None,
                  lgb_feat_path=None,
-                 file_feat_path=None,
+                #  file_feat_path=None,
                  quantile_feat_path=None,
-                #  quantilephoton_feat_path=None,
+                 quantilephoton_feat_path=None,
                  transform=None,
                  sample_ind=None,
                  device=None,
@@ -135,9 +135,9 @@ class ArielMLFeatDataset(Dataset):
             self.target = self.data[:, -1]
             self.data = self.data[:, :-1]
         self.feats = torch.from_numpy(pd.read_csv(feat_path).values)[sample_ind]
-        if file_feat_path is not None:
-            feat_file = torch.load(file_feat_path)[sample_ind]
-            self.feats = torch.cat([self.feats, feat_file], axis=1)
+        # if file_feat_path is not None:
+        #     feat_file = torch.load(file_feat_path)[sample_ind]
+        #     self.feats = torch.cat([self.feats, feat_file], axis=1)
 
         if quantile_feat_path is not None:
             quantile_feat = torch.from_numpy(np.load(quantile_feat_path))[quantile_indices]
@@ -145,11 +145,11 @@ class ArielMLFeatDataset(Dataset):
             # print(quantile_feat.shape)
             self.feats = torch.cat([self.feats, quantile_feat], axis=1)
 
-        # if quantilephoton_feat_path is not None:
-        #     quantilephoton_feat = torch.from_numpy(np.load(quantilephoton_feat_path))[quantilephoton_indices]
-        #     quantilephoton_feat = quantilephoton_feat.reshape(-1, 55*3)
-        #     # print(quantilephoton_feat.shape)
-        #     self.feats = torch.cat([self.feats, quantilephoton_feat], axis=1)
+        if quantilephoton_feat_path is not None:
+            quantilephoton_feat = torch.from_numpy(np.load(quantilephoton_feat_path))[quantilephoton_indices]
+            quantilephoton_feat = quantilephoton_feat.reshape(-1, 55*3)
+            # print(quantilephoton_feat.shape)
+            self.feats = torch.cat([self.feats, quantilephoton_feat], axis=1)
 
         if lgb_feat_path is not None:
             feat_lgb = torch.from_numpy(np.loadtxt(lgb_feat_path))[sample_ind]
@@ -194,7 +194,7 @@ def subavg_transform(x, avg_vals):
     out = x.clone()
     # out = torch.clip(out, min=-0.1, max=0.1)
     # out -= avg_vals.astype(np.float32)
-    out /= 0.02 #0.006
+    out /= 0.006 #0.006
     return out
 
 def generate_indice(indices, step=100):

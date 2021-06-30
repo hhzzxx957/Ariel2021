@@ -231,7 +231,7 @@ class DilatedNet(nn.Module):
 
         mlpout_input_size = hidden_size // 4
         if add_feat:
-            mlpout_input_size += 16 +55*3 #+55
+            mlpout_input_size += 16 +55*6 #+55
 
         self.mlpout = nn.Sequential(
             nn.Linear(mlpout_input_size, 256),
@@ -264,9 +264,9 @@ class DilatedNet(nn.Module):
         feat_lgb = None
         if self.add_feat:
             # x, feat = x
-            feat_file = feat[:, 6+1:6+3].long()
-            feat_quantile = feat[:, 6+3:6+3+55*3]
-            feat_lgb = feat[:, 6+3+55*3:6+3+55*3+55]
+            # feat_file = feat[:, 6+1:6+3].long()
+            feat_quantile = feat[:, 6:6+55*6]
+            # feat_lgb = feat[:, 6+55*3:6+55*3+55]
             feat = feat[:,:6]
         out = self.cnn(x)
         out = self.flatten(out)
@@ -280,9 +280,9 @@ class DilatedNet(nn.Module):
 
         out = self.mlpout(out)
 
-        if feat_lgb is not None:
-            out += feat_lgb
-            out = self.mlplgb(out)
+        # if feat_lgb is not None:
+        #     out += feat_lgb
+        #     out = self.mlplgb(out)
         return out
 
 

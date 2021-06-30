@@ -139,5 +139,5 @@ if __name__ == "__main__":
     parser.add_argument('--save_name', type=str, default='MLP')
     parser.add_argument('--device_id', type=int, default=0)
     args = parser.parse_args()
-    prediction(save_name=args.save_name, device_id=args.device_id)
+    cross_prediction(save_name=args.save_name, device_id=args.device_id)
     print(f'Inference time: {(time.time()-start_time)/60:.3f} mins')

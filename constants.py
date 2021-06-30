@@ -13,11 +13,11 @@ lc_train_path = project_dir / "data/noisy_train/home/ucapats/Scratch/ml_data_cha
 data_test_path = project_dir / "data/full_test_signal_preprocessed.pt"
 data_train_path = project_dir / "data/full_train_signal_preprocessed.pt" #full_train_signal_preprocessed.pt"
 
-fftdata_test_path = project_dir / "data/full_test_signal_fft.pt"
-fftdata_train_path = project_dir / "data/full_train_signal_fft.pt"
+# fftdata_test_path = project_dir / "data/full_test_signal_fft.pt"
+# fftdata_train_path = project_dir / "data/full_train_signal_fft.pt"
 
-feat_train_path = project_dir / "data/train_properties_norm_df.csv"
-feat_test_path = project_dir / "data/test_properties_norm_df.csv"
+feat_train_path = project_dir / "data/train_properties_df.csv"
+feat_test_path = project_dir / "data/test_properties_df.csv"
 lgb_train_path = project_dir / "ml_method/lgb_oof_train_preds.txt"
 lgb_test_path = project_dir / "ml_method/lgb_oof_test_preds.txt"
 filefeat_train_path = project_dir / 'data/file_feat_train.pt'

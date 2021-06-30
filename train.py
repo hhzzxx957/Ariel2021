@@ -33,14 +33,19 @@ def train(save_name, log_dir, device_id=0, draw_graph=False, valid=True):
     # train_ind = indices_tot[:train_size]
     # valid_ind = indices_tot[train_size:train_size+val_size]
 
-    train_ind = generate_indice(indices_tot)
+    if valid:
+        train_ind = indices_tot[:int(train_size*0.9)]
+        train_ind = generate_indice(train_ind)
+    else:
+        train_ind = generate_indice(indices_tot)
 
     # Training
     dataset_train = ArielMLFeatDataset(data_train_path,
                                    feat_train_path,
                                    lgb_train_path,
-                                   filefeat_train_path,
+                                #    filefeat_train_path,
                                    quantilefeat_train_path,
+                                   quantilephotonfeat_train_path,
                                    sample_ind=train_ind,
                                    transform=subavg_transform, #simple_transform,
                                    device=device)
@@ -50,16 +55,15 @@ def train(save_name, log_dir, device_id=0, draw_graph=False, valid=True):
                               shuffle=True)
                   
     if valid:
-        train_ind = indices_tot[:int(train_size*0.9)]
-        train_ind = generate_indice(train_ind)
         valid_ind = indices_tot[int(train_size*0.9):int(train_size)]
         valid_ind = generate_indice(valid_ind)
         # Validation
         dataset_val = ArielMLFeatDataset(data_train_path,
                                     feat_train_path,
                                     lgb_train_path,
-                                    filefeat_train_path,
+                                    # filefeat_train_path,
                                     quantilefeat_train_path,
+                                    quantilephotonfeat_train_path,
                                     sample_ind=valid_ind,
                                     transform=subavg_transform, #simple_transform,
                                     device=device)
@@ -151,7 +155,7 @@ def cross_valid_train(save_name, log_dir, device_id=0, nsplit=10):
         device = 'cpu'
 
     indices_tot = list(range(1256))
-    kf = KFold(n_splits=nsplit, shuffle=True, random_state=2021)
+    kf = KFold(n_splits=nsplit, shuffle=True, random_state=random_seed)
     for i, (train_ind, valid_ind) in enumerate(kf.split(indices_tot)):
         # Training
         train_ind = generate_indice(train_ind)
@@ -159,8 +163,9 @@ def cross_valid_train(save_name, log_dir, device_id=0, nsplit=10):
         dataset_train = ArielMLFeatDataset(data_train_path,
                                     feat_train_path,
                                     lgb_train_path,
-                                    filefeat_train_path,
+                                    # filefeat_train_path,
                                     quantilefeat_train_path,
+                                    quantilephotonfeat_train_path,
                                     sample_ind=train_ind,
                                     transform=subavg_transform, #simple_transform,
                                     device=device)
@@ -168,8 +173,9 @@ def cross_valid_train(save_name, log_dir, device_id=0, nsplit=10):
         dataset_val = ArielMLFeatDataset(data_train_path,
                                     feat_train_path,
                                     lgb_train_path,
-                                    filefeat_train_path,
+                                    # filefeat_train_path,
                                     quantilefeat_train_path,
+                                    quantilephotonfeat_train_path,
                                     sample_ind=valid_ind,
                                     transform=subavg_transform, #simple_transform,
                                     device=device)
@@ -249,7 +255,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_dir', type=str, default='test')
     parser.add_argument('--device_id', type=int, default=0)
     args = parser.parse_args()
-    train(args.save_name, args.log_dir, device_id=args.device_id)
+    cross_valid_train(args.save_name, args.log_dir, device_id=args.device_id)
     print(
         f'Parameters: {args.save_name}, train_size: {train_size}, batch_size: {batch_size}'
     )
