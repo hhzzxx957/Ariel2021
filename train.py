@@ -13,7 +13,7 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from constants import *
-from models import MLP, Baseline, DilatedCNNLSTMNet, DilatedNet
+from models import Baseline, DilatedNet
 from utils import (ArielMLDataset, ArielMLFeatDataset, ChallengeMetric, generate_indice,
                    Scheduler, one_cycle, simple_transform, subavg_transform)
 
@@ -52,7 +52,7 @@ def train(save_name, log_dir, device_id=0, draw_graph=False, valid=True):
     # Loaders
     loader_train = DataLoader(dataset_train,
                               batch_size=batch_size,
-                              shuffle=True)
+                              shuffle=True,)
                   
     if valid:
         valid_ind = indices_tot[int(train_size*0.9):int(train_size)]

@@ -80,18 +80,20 @@ def ensemble_predictions(preds_files):
     return final_pred
 
 pred_dirs = [
-    'outputs/featquanlgb_proprocessed10_adamw_cross/ensemble_evaluation_2021-06-30.txt',
-    'outputs/featquanlgb_proprocessed6_adamw_cross/ensemble_evaluation_2021-06-30.txt',
+    # 'outputs/featquanlgb_proprocessed10_adamw_cross/ensemble_evaluation_2021-06-30.txt',
+    # 'outputs/featquanlgb_proprocessed6_adamw_cross/ensemble_evaluation_2021-06-30.txt',
     'outputs/featquanlgb_preprocessed_adamw_cross/ensemble_evaluation_2021-06-26.txt',
     'outputs/featquan_proprocessed10_adamw_cross/ensemble_evaluation_2021-06-30.txt',
     'outputs/featquan_proprocessed6_adamw_cross/ensemble_evaluation_2021-06-30.txt',
     'outputs/featquan_preprocessed_adamw_cross/ensemble_evaluation_2021-06-26.txt',
     'outputs/featquan_fftsmooth_adamw_cross/ensemble_evaluation_2021-06-28.txt',
-    'outputs/featquanphoton_proprocessed_adamw_cross/ensemble_evaluation_2021-06-30.txt'
+    'outputs/featquanphoton_proprocessed_adamw_cross/ensemble_evaluation_2021-06-30.txt',
+    'outputs/featquanphoton_proprocessed_adamw_cross_seed1024/ensemble_evaluation_2021-07-01.txt',
+    'outputs/featquanphoton_proprocessed6_adamw_cross_seed1024/ensemble_evaluation_2021-07-01.txt'
 ]
 
 filna_preds = ensemble_predictions(pred_dirs)
-np.savetxt('outputs/finalensemble.txt', filna_preds)
+np.savetxt('outputs/finalensemble2.txt', filna_preds)
 # %%
 from sklearn.manifold import TSNE
 preds1 = np.loadtxt('outputs/featquan_preprocessed_adamw_cross/ensemble_evaluation_2021-06-26.txt')

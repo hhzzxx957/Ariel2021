@@ -31,7 +31,7 @@ quantilephotonfeat_test_path = project_dir / 'data/quantile_featphoton_test.npy'
 
 avg_val_path = project_dir / "data/average_signal_new.npy"
 
-random_seed=100
+random_seed=2021
 
 n_wavelengths = 55
 n_timesteps = 300

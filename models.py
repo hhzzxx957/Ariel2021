@@ -3,7 +3,6 @@ import torch
 from torch import nn
 from torch.nn import Module, Sequential
 import torch.nn.functional as F
-import pytorch_lightning as pl
 
 from constants import n_timesteps, n_wavelengths
 
@@ -73,7 +72,7 @@ class UConv1d(nn.Module):
                  drop=None,
                  bn=True,
                  pool=True,
-                 dilation=0,
+                 dilation=1,
                  activ=lambda: nn.PReLU()):
 
         super().__init__()
@@ -100,7 +99,7 @@ class SkipConv1d(nn.Module):
                  ni,
                  kernel,
                  stride=1,
-                 pad=0,
+                 pad=1,
                  drop=None,
                  bn=True,
                  dilation=0,
@@ -139,6 +138,30 @@ class AttentionConv(nn.Module):
 
         return out
 
+class ResBlock(nn.Module):
+    def __init__(self, inchannel, outchannel, stride=1):
+        super(ResBlock, self).__init__()
+        #这里定义了残差块内连续的2个卷积层
+        self.left = nn.Sequential(
+            UConv1d(inchannel, outchannel, 3, stride=stride, pad=1, pool=False),
+            UConv1d(outchannel, outchannel, 3, stride=1, pad=1, pool=False, activ=None)
+        )
+        self.shortcut = nn.Sequential()
+        if stride != 1 or inchannel != outchannel:
+            #shortcut，这里为了跟2个卷积层的结果结构一致，要做处理
+            self.shortcut = nn.Sequential(
+                nn.Conv1d(inchannel, outchannel, kernel_size=1, stride=stride),
+                nn.BatchNorm1d(outchannel)
+            )
+        self.acti = nn.PReLU()
+            
+    def forward(self, x):
+        out = self.left(x)
+        #将2个卷积层的输出跟处理过的x相加，实现ResNet的基本结构
+        out = out + self.shortcut(x)
+        out = self.acti(out)
+        return out
+
 
 class DilatedNet(nn.Module):
     def __init__(self, in_channel=55, hidden_size=2048, dilation=2, add_feat=False, add_fft=False):
@@ -148,21 +171,33 @@ class DilatedNet(nn.Module):
         self.dilation = dilation
         self.hidden_size = hidden_size
         self.add_feat = add_feat
-        # Input
+        self.inchannel = 64
+
+        self.layer1 = self._make_layer(ResBlock, 64, 2, stride=1)
+        self.layer2 = self._make_layer(ResBlock, 128, 2, stride=1)
+        self.layer3 = self._make_layer(ResBlock, 256, 2, stride=2)
         self.cnn = nn.Sequential(
-            UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
-            UConv1d(64, 64, kernel=3, pad=2, dilation=dilation),
+            UConv1d(in_channel, 64, 3),
+            self.layer1,
+            self.layer2,
+            self.layer3,
+            nn.AvgPool1d(kernel_size=2, stride=2)
+        )
+
+        # self.cnn = nn.Sequential(
+        #     UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
+        #     UConv1d(64, 64, kernel=3, pad=2, dilation=dilation),
             
-            UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
-            UConv1d(128, 128, kernel=3, pad=2, dilation=dilation),
+        #     UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
+        #     UConv1d(128, 128, kernel=3, pad=2, dilation=dilation),
             
-            UConv1d(128, 256, kernel=3, pad=2, dilation=dilation),
-            UConv1d(256, 256, kernel=3, pad=2, dilation=dilation),
-            )
+        #     UConv1d(128, 256, kernel=3, pad=2, dilation=dilation),
+        #     UConv1d(256, 256, kernel=3, pad=2, dilation=dilation),
+        #     )
         self.flatten = Flatten()
 
         self.mlp = nn.Sequential(
-            nn.Linear(256 * (n_timesteps // 2**6), hidden_size),  # 
+            nn.Linear(9472, hidden_size),  # 256 * (n_timesteps // 2**6)
             nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size // 4),
@@ -200,7 +235,15 @@ class DilatedNet(nn.Module):
             nn.Linear(128, in_channel),
         )
         self.init_weights(nn.init.kaiming_normal_)
-        
+
+    def _make_layer(self, block, channels, num_blocks, stride):
+        strides = [stride] + [1] * (num_blocks - 1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.inchannel, channels, stride))
+            self.inchannel = channels
+        return nn.Sequential(*layers)
+
     def init_weights(self, init_fn):
         def init(m): 
             for child in m.children():
@@ -221,6 +264,7 @@ class DilatedNet(nn.Module):
             feat_quantile = feat[:, 6:6+55*3]
             # feat_lgb = feat[:, 6+55*3:6+55*3+55]
             feat = feat[:,:6]
+
         out = self.cnn(x)
         out = self.flatten(out)
         out = self.mlp(out)
