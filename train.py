@@ -45,7 +45,7 @@ def train(save_name, log_dir, device_id=0, draw_graph=False, valid=True):
                                    lgb_train_path,
                                 #    filefeat_train_path,
                                    quantilefeat_train_path,
-                                   quantilephotonfeat_train_path,
+                                #    quantilephotonfeat_train_path,
                                    sample_ind=train_ind,
                                    transform=subavg_transform, #simple_transform,
                                    device=device)
@@ -63,7 +63,7 @@ def train(save_name, log_dir, device_id=0, draw_graph=False, valid=True):
                                     lgb_train_path,
                                     # filefeat_train_path,
                                     quantilefeat_train_path,
-                                    quantilephotonfeat_train_path,
+                                    # quantilephotonfeat_train_path,
                                     sample_ind=valid_ind,
                                     transform=subavg_transform, #simple_transform,
                                     device=device)
@@ -165,7 +165,7 @@ def cross_valid_train(save_name, log_dir, device_id=0, nsplit=10):
                                     lgb_train_path,
                                     # filefeat_train_path,
                                     quantilefeat_train_path,
-                                    quantilephotonfeat_train_path,
+                                    # quantilephotonfeat_train_path,
                                     sample_ind=train_ind,
                                     transform=subavg_transform, #simple_transform,
                                     device=device)
@@ -175,7 +175,7 @@ def cross_valid_train(save_name, log_dir, device_id=0, nsplit=10):
                                     lgb_train_path,
                                     # filefeat_train_path,
                                     quantilefeat_train_path,
-                                    quantilephotonfeat_train_path,
+                                    # quantilephotonfeat_train_path,
                                     sample_ind=valid_ind,
                                     transform=subavg_transform, #simple_transform,
                                     device=device)

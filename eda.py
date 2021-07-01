@@ -17,10 +17,10 @@ max_vals = torch.max(full_train_signal_pt[:,:-1], dim=1)[0]
 min_vals = torch.min(full_train_signal_pt[:,:-1], dim=1)[0]
 # %%
 # preds1 = np.loadtxt('outputs/featquan_proprocessed_variance_adamw_cross/ensemble_evaluation_2021-06-29.txt')
-preds1 = np.loadtxt('outputs/featquan_preprocessed_adamw_cross/ensemble_evaluation_2021-06-26.txt')
-# preds = np.loadtxt('ml_method/lgb_oof_test_preds.txt')
-print(np.mean(preds1))
-preds1
+# preds1 = np.loadtxt('outputs/featquanphoton_proprocessed_adamw_cross/ensemble_evaluation_2021-06-30.txt')
+preds = np.loadtxt('outputs/finalensemble.txt')
+print(np.mean(preds))
+preds
 
 #%%
 preds = (preds1 + preds2)/2
@@ -86,9 +86,50 @@ pred_dirs = [
     'outputs/featquan_proprocessed10_adamw_cross/ensemble_evaluation_2021-06-30.txt',
     'outputs/featquan_proprocessed6_adamw_cross/ensemble_evaluation_2021-06-30.txt',
     'outputs/featquan_preprocessed_adamw_cross/ensemble_evaluation_2021-06-26.txt',
-    'outputs/featquan_fftsmooth_adamw_cross/ensemble_evaluation_2021-06-28.txt'
+    'outputs/featquan_fftsmooth_adamw_cross/ensemble_evaluation_2021-06-28.txt',
+    'outputs/featquanphoton_proprocessed_adamw_cross/ensemble_evaluation_2021-06-30.txt'
 ]
 
 filna_preds = ensemble_predictions(pred_dirs)
 np.savetxt('outputs/finalensemble.txt', filna_preds)
+# %%
+from sklearn.manifold import TSNE
+preds1 = np.loadtxt('outputs/featquan_preprocessed_adamw_cross/ensemble_evaluation_2021-06-26.txt')
+preds2 = np.loadtxt('outputs/featquanlgb_proprocessed10_adamw_cross/ensemble_evaluation_2021-06-30.txt')
+preds3 = np.loadtxt('outputs/featquanphoton_proprocessed_adamw_cross/ensemble_evaluation_2021-06-30.txt')
+
+preds_ensem = np.loadtxt('outputs/finalensemble.txt')
+# %%
+preds1_embedded = TSNE(n_components=2).fit_transform(preds1[:500])
+preds2_embedded = TSNE(n_components=2).fit_transform(preds2[:500])
+preds3_embedded = TSNE(n_components=2).fit_transform(preds3[:500])
+
+preds_ensem_embedded = TSNE(n_components=2).fit_transform(preds_ensem[:500])
+# %%
+# initialize a matplotlib plot
+plt.scatter(preds1_embedded[:,0],preds1_embedded[:,1])
+plt.scatter(preds2_embedded[:,0],preds2_embedded[:,1])
+plt.scatter(preds3_embedded[:,0],preds3_embedded[:,1])
+plt.scatter(preds_ensem_embedded[:,0],preds_ensem_embedded[:,1])
+plt.show()
+# %%
+np.min(preds_ensem)
+# %%
+df_denoise = pd.read_pickle('data/full_train_denoise_df.pickle')
+planet_id = np.repeat(list(range(1256)), 55)
+df_denoise['spec_id'] = planet_id
+df_train_mean = df_denoise.groupby(planet_id).mean()
+# %%
+plt.hist(df_train_mean.iloc[:, 150], bins=20)
+plt.xlim(-0.03, 0)
+plt.show()
+# %%
+df_test_denoise = pd.read_pickle('data/full_test_denoise_df.pickle')
+planet_id = np.repeat(list(range(539)), 55)
+df_test_denoise['spec_id'] = planet_id
+df_test_mean = df_test_denoise.groupby(planet_id).mean()
+# %%
+plt.hist(df_test_mean.iloc[:, 150], bins=20)
+plt.xlim(-0.03, 0)
+plt.show()
 # %%

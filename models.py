@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from torch.nn import Module, Sequential
 import torch.nn.functional as F
+import pytorch_lightning as pl
 
 from constants import n_timesteps, n_wavelengths
 
@@ -42,54 +43,6 @@ class Baseline(Module):
         )  # Need to flatten out the input light curves for this type network
         out = self.network(out)
         return out
-
-
-class MLP(torch.nn.Module):
-    """ MLP model"""
-    def __init__(self,
-                 num_mlp_layers=3,
-                 emb_dim=400,
-                 drop_ratio=0,
-                 input_dim=n_wavelengths * n_timesteps,
-                 output_dim=n_wavelengths):
-        super(MLP, self).__init__()
-        self.num_mlp_layers = num_mlp_layers
-        self.emb_dim = emb_dim
-        self.drop_ratio = drop_ratio
-
-        # mlp
-        input_module_list = [
-            torch.nn.Linear(input_dim, self.emb_dim),
-            torch.nn.BatchNorm1d(self.emb_dim),
-            torch.nn.ReLU(),
-            torch.nn.Dropout(p=self.drop_ratio),
-        ]
-
-        self.input_fc = torch.nn.Sequential(*input_module_list)
-
-        module_list = []
-        for _ in range(self.num_mlp_layers - 1):
-            module_list += [
-                torch.nn.Linear(self.emb_dim, self.emb_dim),
-                torch.nn.BatchNorm1d(self.emb_dim),
-                torch.nn.ReLU(),
-                torch.nn.Dropout(p=self.drop_ratio)
-            ]
-
-        # module_list = [torch.nn.Linear(input_dim, 1)]
-
-        self.mlp = torch.nn.Sequential(*module_list)
-
-        # relu is applied in the last layer to ensure positivity
-        output_module_list = [torch.nn.Linear(self.emb_dim, output_dim)]
-        self.output_fc = torch.nn.Sequential(*output_module_list)
-
-    def forward(self, x):
-        x = torch.flatten(x, start_dim=1)
-        x = self.input_fc(x)
-        x = self.mlp(x)
-        output = self.output_fc(x)
-        return output
 
 
 # Implemented
@@ -231,7 +184,7 @@ class DilatedNet(nn.Module):
 
         mlpout_input_size = hidden_size // 4
         if add_feat:
-            mlpout_input_size += 16 +55*6 #+55
+            mlpout_input_size += 16 +55*3 #+55
 
         self.mlpout = nn.Sequential(
             nn.Linear(mlpout_input_size, 256),
@@ -265,7 +218,7 @@ class DilatedNet(nn.Module):
         if self.add_feat:
             # x, feat = x
             # feat_file = feat[:, 6+1:6+3].long()
-            feat_quantile = feat[:, 6:6+55*6]
+            feat_quantile = feat[:, 6:6+55*3]
             # feat_lgb = feat[:, 6+55*3:6+55*3+55]
             feat = feat[:,:6]
         out = self.cnn(x)
@@ -284,8 +237,6 @@ class DilatedNet(nn.Module):
         #     out += feat_lgb
         #     out = self.mlplgb(out)
         return out
-
-
 
 
 class BlockLSTM(nn.Module):
@@ -311,80 +262,3 @@ class BlockLSTM(nn.Module):
         h_n = torch.transpose(h_n, 0, 1)
         return h_n
 
-
-class DilatedCNNLSTMNet(nn.Module):
-    def __init__(self, in_channel=55, hidden_size=2000, dilation=2, add_feat=False):
-        """
-        """
-        super(DilatedCNNLSTMNet, self).__init__()
-        self.dilation = dilation
-        self.hidden_size = hidden_size
-        self.add_feat = add_feat
-        # Input
-        self.lstm_block = BlockLSTM(300, 2)
-        self.flatten2 = Flatten()
-
-        self.cnn = nn.Sequential(
-            UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
-            UConv1d(64, 64, kernel=3, pad=2, dilation=dilation),
-            UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
-            UConv1d(128, 128, kernel=3, pad=2, dilation=dilation),
-            UConv1d(128, 256, kernel=3, pad=2, dilation=dilation),
-            UConv1d(256, 256, kernel=3, pad=2, dilation=dilation),
-            )
-        self.flatten = Flatten()
-
-        self.mlp = nn.Sequential(
-            nn.Linear(256 * (n_timesteps // 2**6), hidden_size),  # 
-            nn.BatchNorm1d(hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size // 4),
-            nn.BatchNorm1d(hidden_size // 4),
-            nn.ReLU(),
-        )
-        self.mlp2 = nn.Sequential(
-            nn.Linear(6, 64),  # 
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.Linear(64, 16),
-            nn.BatchNorm1d(16),
-            nn.ReLU(),
-        )
-        if add_feat:
-            mlpout_input_size = hidden_size // 4 + 16 + 256*2
-        else:
-            mlpout_input_size = hidden_size // 4 + 256*2
-        self.mlpout = nn.Sequential(
-            nn.Linear(mlpout_input_size, 200),
-            nn.BatchNorm1d(200),
-            nn.ReLU(),
-            nn.Linear(200, in_channel),
-        )
-        self.init_weights(nn.init.kaiming_normal_)
-        
-    def init_weights(self, init_fn):
-        def init(m): 
-            for child in m.children():
-                if isinstance(child, nn.Conv1d):
-                    init_fn(child.weights)
-        init(self)
-
-    def forward(self, x):
-        """
-
-        :param x: Pytorch Variable
-        :return:
-        """
-        if self.add_feat:
-            x, feat = x
-        lstm_out = self.lstm_block(x)
-        lstm_out = self.flatten2(lstm_out)
-
-        out = self.cnn(x)
-        out = self.flatten(out)
-        out = self.mlp(out)
-        if self.add_feat:
-            feat_out = self.mlp2(feat)
-            out = torch.cat([out, lstm_out, feat_out], axis=1)
-        out = self.mlpout(out)
-        return out
