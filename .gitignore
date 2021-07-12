@@ -138,3 +138,5 @@ dmypy.json
 *.txt
 
 lightning_logs/
+res/
+eda.py
