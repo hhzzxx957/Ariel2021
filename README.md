@@ -3,8 +3,6 @@ Repository hosting the baseline solution for [Ariel data challenge 2021](https:/
 
 This code makes use of [numpy](https://github.com/numpy/numpy) and [pytorch](https://github.com/pytorch/pytorch).
 
-An cleaner but unstable pytorch lightning version with an advanced model using resnet structure is in lighning branch (not submitted version).
-
 ## Repository content
 
 - ```download_data.sh``` contains a shell script to download and extract the challenge's data
