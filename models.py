@@ -173,31 +173,31 @@ class DilatedNet(nn.Module):
         self.add_feat = add_feat
         self.inchannel = 64
 
-        self.layer1 = self._make_layer(ResBlock, 64, 2, stride=1)
-        self.layer2 = self._make_layer(ResBlock, 128, 2, stride=1)
-        self.layer3 = self._make_layer(ResBlock, 256, 2, stride=2)
-        self.cnn = nn.Sequential(
-            UConv1d(in_channel, 64, 3),
-            self.layer1,
-            self.layer2,
-            self.layer3,
-            nn.AvgPool1d(kernel_size=2, stride=2)
-        )
-
+        # self.layer1 = self._make_layer(ResBlock, 64, 2, stride=1)
+        # self.layer2 = self._make_layer(ResBlock, 128, 2, stride=1)
+        # self.layer3 = self._make_layer(ResBlock, 256, 2, stride=2)
         # self.cnn = nn.Sequential(
-        #     UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
-        #     UConv1d(64, 64, kernel=3, pad=2, dilation=dilation),
+        #     UConv1d(in_channel, 64, 3),
+        #     self.layer1,
+        #     self.layer2,
+        #     self.layer3,
+        #     nn.AvgPool1d(kernel_size=2, stride=2)
+        # )
+
+        self.cnn = nn.Sequential(
+            UConv1d(in_channel, 64, kernel=3, pad=2, dilation=dilation),
+            UConv1d(64, 64, kernel=3, pad=2, dilation=dilation),
             
-        #     UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
-        #     UConv1d(128, 128, kernel=3, pad=2, dilation=dilation),
+            UConv1d(64, 128, kernel=3, pad=2, dilation=dilation),
+            UConv1d(128, 128, kernel=3, pad=2, dilation=dilation),
             
-        #     UConv1d(128, 256, kernel=3, pad=2, dilation=dilation),
-        #     UConv1d(256, 256, kernel=3, pad=2, dilation=dilation),
-        #     )
+            UConv1d(128, 256, kernel=3, pad=2, dilation=dilation),
+            UConv1d(256, 256, kernel=3, pad=2, dilation=dilation),
+            )
         self.flatten = Flatten()
 
         self.mlp = nn.Sequential(
-            nn.Linear(9472, hidden_size),  # 256 * (n_timesteps // 2**6)
+            nn.Linear(256 * (n_timesteps // 2**6), hidden_size),  # 9472 #256 * (n_timesteps // 2**6)
             nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size // 4),
