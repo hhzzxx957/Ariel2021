@@ -140,3 +140,4 @@ dmypy.json
 lightning_logs/
 res/
 eda.py
+*.sh
