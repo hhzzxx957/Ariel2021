@@ -3,8 +3,6 @@ Repository hosting the solution for [Ariel data challenge 2021](https://www.arie
 
 This code makes use of [numpy](https://github.com/numpy/numpy) and [pytorch](https://github.com/pytorch/pytorch).
 
-An cleaner but unstable pytorch lightning version with an advanced model using resnet structure is in lighning branch (not submitted version).
-
 ## Repository content
 
 - ```train.py``` contains main functions of training
